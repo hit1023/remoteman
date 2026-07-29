@@ -6,15 +6,25 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import auth, console, crypto, models, schemas
+from . import auth, console, crypto, import_ssh, models, schemas
 from .database import Base, SessionLocal, engine, get_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("remoteman")
 
 Base.metadata.create_all(bind=engine)
+
+
+def _migrate_schema() -> None:
+    """既存DBに新しいカラムを追加する(新規インストールでは何もしない、冪等)。"""
+    with engine.connect() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(servers)"))}
+        if "proxy_jump_id" not in columns:
+            conn.execute(text("ALTER TABLE servers ADD COLUMN proxy_jump_id INTEGER"))
+            conn.commit()
 
 
 def _ensure_initial_admin() -> None:
@@ -39,12 +49,14 @@ def _ensure_initial_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _migrate_schema()
     _ensure_initial_admin()
     yield
 
 
 app = FastAPI(title="remoteman", lifespan=lifespan)
 app.include_router(console.router)
+app.include_router(import_ssh.router)
 
 
 # ============================================================
@@ -229,6 +241,8 @@ def _server_out(server: models.Server) -> schemas.ServerOut:
         ssh_user=server.ssh_user,
         credential_id=server.credential_id,
         credential_name=server.credential.name if server.credential else None,
+        proxy_jump_id=server.proxy_jump_id,
+        proxy_jump_name=server.proxy_jump.name if server.proxy_jump else None,
         enabled=server.enabled,
         created_at=server.created_at,
     )
@@ -250,6 +264,27 @@ def _check_credential_exists(db: Session, credential_id: Optional[int]) -> None:
         raise HTTPException(status_code=404, detail="指定した認証情報が見つかりません")
 
 
+def _check_proxy_jump(db: Session, server_id: Optional[int], proxy_jump_id: Optional[int]) -> None:
+    if proxy_jump_id is None:
+        return
+    if server_id is not None and proxy_jump_id == server_id:
+        raise HTTPException(status_code=400, detail="踏み台に自分自身は指定できません")
+    visited: set[int] = {server_id} if server_id is not None else set()
+    current_id: Optional[int] = proxy_jump_id
+    depth = 0
+    while current_id is not None:
+        if current_id in visited:
+            raise HTTPException(status_code=400, detail="踏み台の設定が循環しています")
+        visited.add(current_id)
+        depth += 1
+        if depth > 8:
+            raise HTTPException(status_code=400, detail="踏み台の多段接続が深すぎます(上限8段)")
+        hop = db.query(models.Server).filter(models.Server.id == current_id).first()
+        if hop is None:
+            raise HTTPException(status_code=404, detail="指定した踏み台サーバーが見つかりません")
+        current_id = hop.proxy_jump_id
+
+
 @app.post("/api/servers", response_model=schemas.ServerOut, status_code=201)
 def create_server(
     payload: schemas.ServerCreate,
@@ -257,12 +292,14 @@ def create_server(
     _current_user: models.User = Depends(auth.get_current_user),
 ):
     _check_credential_exists(db, payload.credential_id)
+    _check_proxy_jump(db, None, payload.proxy_jump_id)
     server = models.Server(
         name=payload.name,
         host=payload.host,
         ssh_port=payload.ssh_port,
         ssh_user=payload.ssh_user,
         credential_id=payload.credential_id,
+        proxy_jump_id=payload.proxy_jump_id,
         enabled=payload.enabled,
     )
     db.add(server)
@@ -285,6 +322,8 @@ def update_server(
     data = payload.model_dump(exclude_unset=True)
     if "credential_id" in data:
         _check_credential_exists(db, data["credential_id"])
+    if "proxy_jump_id" in data:
+        _check_proxy_jump(db, server_id, data["proxy_jump_id"])
     for key, value in data.items():
         setattr(server, key, value)
 
@@ -302,6 +341,13 @@ def delete_server(
     server = db.query(models.Server).filter(models.Server.id == server_id).first()
     if server is None:
         raise HTTPException(status_code=404, detail="サーバーが見つかりません")
+    dependents = db.query(models.Server).filter(models.Server.proxy_jump_id == server_id).all()
+    if dependents:
+        names = "、".join(s.name for s in dependents)
+        raise HTTPException(
+            status_code=400,
+            detail=f"このサーバーは次のサーバーの踏み台として使用されているため削除できません: {names}",
+        )
     db.delete(server)
     db.commit()
 

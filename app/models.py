@@ -41,7 +41,9 @@ class Server(Base):
     ssh_port = Column(Integer, nullable=False, default=22)
     ssh_user = Column(String, nullable=False)
     credential_id = Column(Integer, ForeignKey("credentials.id"), nullable=True)
+    proxy_jump_id = Column(Integer, ForeignKey("servers.id"), nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=utcnow)
 
     credential = relationship("Credential", back_populates="servers")
+    proxy_jump = relationship("Server", remote_side=[id])

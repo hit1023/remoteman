@@ -6,11 +6,10 @@ import threading
 import time
 from typing import Optional
 
-import paramiko
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
-from . import auth, crypto, models, ssh_key
+from . import auth, models, ssh_connect
 from .database import SessionLocal, get_db
 
 logger = logging.getLogger("remoteman.console")
@@ -52,8 +51,10 @@ def create_console_ticket(
         raise HTTPException(status_code=404, detail="サーバーが見つかりません")
     if not server.enabled:
         raise HTTPException(status_code=400, detail="このサーバーは無効化されています")
-    if server.credential is None:
-        raise HTTPException(status_code=400, detail="認証情報が設定されていません")
+    try:
+        ssh_connect.validate_chain(server)
+    except ssh_connect.ChainError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     ticket = _create_ticket(server_id, current_user.username)
     return {"ticket": ticket}
 
@@ -79,37 +80,29 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
             await _send_error(websocket, "サーバーまたは認証情報が見つかりません")
             await websocket.close()
             return
-        credential = server.credential
-        host, port, ssh_user = server.host, server.ssh_port or 22, server.ssh_user
-        cred_auth_type = credential.auth_type
-        secret = crypto.decrypt(credential.secret_encrypted)
-        passphrase = crypto.decrypt(credential.passphrase_encrypted)
-        server_name = server.name
+        host, server_name = server.host, server.name
+        try:
+            clients = ssh_connect.open_chain(server)
+        except ssh_connect.ChainError as e:
+            await _send_error(websocket, str(e))
+            await websocket.close()
+            return
     finally:
         db.close()
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = clients[-1]
     try:
-        connect_kwargs = dict(
-            hostname=host, port=port, username=ssh_user,
-            timeout=10, banner_timeout=10, auth_timeout=10,
-        )
-        if cred_auth_type == "key":
-            connect_kwargs["pkey"] = ssh_key.load_private_key(secret, passphrase)
-        else:
-            connect_kwargs["password"] = secret
-        client.connect(**connect_kwargs)
         channel = client.get_transport().open_session()
         channel.get_pty(term="xterm-256color", width=80, height=24)
         channel.invoke_shell()
         channel.settimeout(0.0)
     except Exception as e:
+        ssh_connect.close_chain(clients)
         await _send_error(websocket, f"SSH接続に失敗しました: {e}")
         await websocket.close()
         return
 
-    logger.info("コンソール接続開始: %s (サーバー: %s, ユーザー: %s)", host, server_name, username)
+    logger.info("コンソール接続開始: %s (サーバー: %s, ユーザー: %s, 経由数: %d)", host, server_name, username, len(clients) - 1)
 
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
@@ -168,8 +161,5 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
             channel.close()
         except Exception:
             pass
-        try:
-            client.close()
-        except Exception:
-            pass
+        ssh_connect.close_chain(clients)
         logger.info("コンソール接続終了: %s (サーバー: %s)", host, server_name)

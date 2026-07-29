@@ -212,6 +212,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="servers">サーバー</button>
     <button class="tab-btn" data-tab="credentials">認証情報</button>
+    <button class="tab-btn" data-tab="import">インポート</button>
     <button class="tab-btn" data-tab="users">ユーザー管理</button>
   </nav>
 
@@ -254,6 +255,12 @@
         </div>
         <div class="hint">SSHの秘密鍵/パスワードは「認証情報」タブでまとめて登録し、ここでは選択するだけです(複数サーバーで使い回せます)</div>
 
+        <label>踏み台(ProxyJump、任意)</label>
+        <select id="server-proxy-jump">
+          <option value="">(直接接続)</option>
+        </select>
+        <div class="hint">SSH configの`ProxyCommand`/`ProxyJump`に相当します。選択したサーバーを経由して接続します(多段可)。踏み台側にも認証情報の登録が必要です。</div>
+
         <label><input type="checkbox" id="server-enabled" checked style="width:auto;"> 有効化する</label>
 
         <div class="form-actions">
@@ -293,7 +300,9 @@
         </div>
 
         <label id="credential-secret-label">秘密鍵(PEM形式をそのまま貼り付け)</label>
-        <textarea id="credential-secret" rows="4" placeholder="編集時は空欄のままなら変更されません"></textarea>
+        <input type="file" id="credential-secret-file">
+        <div class="hint">秘密鍵ファイルを選択すると自動的に下の欄に読み込まれます(ファイルはブラウザ内で読み込むだけで、選択後にサーバーへ送信されるのは下のテキスト内容のみです)</div>
+        <textarea id="credential-secret" rows="4" placeholder="編集時は空欄のままなら変更されません" style="margin-top:6px;"></textarea>
 
         <div id="credential-passphrase-box">
           <label>秘密鍵のパスフレーズ(任意)</label>
@@ -313,6 +322,50 @@
         </thead>
         <tbody id="credentials-tbody"></tbody>
       </table>
+    </section>
+
+    <!-- ---------- インポート タブ ---------- -->
+    <section id="tab-import" class="tab-content">
+      <div class="section-header"><h2>~/.ssh/config から一括インポート</h2></div>
+
+      <div class="card">
+        <p class="hint">remotemanはあなたのPC上のファイルを直接読み取れないため、まず<code>~/.ssh/config</code>の中身をそのまま下に貼り付けてください。踏み台(ProxyCommand/ProxyJump)で参照されているHostも一緒に貼り付けておくと、踏み台の設定も自動的に紐付きます。</p>
+        <textarea id="import-config-text" rows="12" placeholder="Host h-1&#10;  HostName 192.168.0.20&#10;  User hit&#10;  IdentityFile ~/.ssh/id_rsa_hit.pem&#10;..."></textarea>
+        <div class="form-actions">
+          <button id="import-parse-btn">解析する</button>
+        </div>
+        <p class="error-text" id="import-parse-error"></p>
+      </div>
+
+      <div id="import-preview-box" class="hidden">
+        <div class="card">
+          <h3>秘密鍵/パスワードの取り込み</h3>
+          <p class="hint">configで参照されている鍵ファイルのパスごとに、鍵ファイルを選択(またはテキストを貼り付け)してください。既にremotemanへ登録済みの鍵は「既存の認証情報を使う」を選べます。</p>
+          <div id="import-credentials-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>取り込むホスト</h3>
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="import-select-all" checked title="全選択/全解除" style="width:auto;"></th>
+                <th>エイリアス</th>
+                <th>接続先</th>
+                <th>SSHユーザー</th>
+                <th>踏み台</th>
+                <th>登録名</th>
+              </tr>
+            </thead>
+            <tbody id="import-hosts-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="form-actions">
+          <button id="import-apply-btn">選択したホストをインポート</button>
+        </div>
+        <p class="error-text" id="import-apply-error"></p>
+      </div>
     </section>
 
     <!-- ---------- ユーザー管理 タブ ---------- -->
@@ -480,6 +533,15 @@ function renderServerCredentialOptions() {
   select.innerHTML = `<option value="">(未設定 — 端末を開くにはSSH認証情報が必要です)</option>${options}`;
 }
 
+function renderServerProxyJumpOptions(excludeId) {
+  const select = document.getElementById("server-proxy-jump");
+  const options = state.servers
+    .filter((s) => !excludeId || String(s.id) !== String(excludeId))
+    .map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`)
+    .join("");
+  select.innerHTML = `<option value="">(直接接続)</option>${options}`;
+}
+
 function openServerForm(server) {
   document.getElementById("server-form-title").textContent = server ? "サーバーを編集" : "サーバーを登録";
   document.getElementById("server-id").value = server ? server.id : "";
@@ -489,6 +551,8 @@ function openServerForm(server) {
   document.getElementById("server-ssh-user").value = server ? server.ssh_user : "";
   renderServerCredentialOptions();
   document.getElementById("server-credential").value = server && server.credential_id ? server.credential_id : "";
+  renderServerProxyJumpOptions(server ? server.id : null);
+  document.getElementById("server-proxy-jump").value = server && server.proxy_jump_id ? server.proxy_jump_id : "";
   document.getElementById("server-enabled").checked = server ? server.enabled : true;
   document.getElementById("server-form-error").textContent = "";
   serverFormBox.classList.remove("hidden");
@@ -497,12 +561,14 @@ function openServerForm(server) {
 document.getElementById("server-form-save-btn").addEventListener("click", async () => {
   const id = document.getElementById("server-id").value;
   const credentialValue = document.getElementById("server-credential").value;
+  const proxyJumpValue = document.getElementById("server-proxy-jump").value;
   const payload = {
     name: document.getElementById("server-name").value.trim(),
     host: document.getElementById("server-host").value.trim(),
     ssh_port: parseInt(document.getElementById("server-ssh-port").value, 10) || 22,
     ssh_user: document.getElementById("server-ssh-user").value.trim(),
     credential_id: credentialValue ? parseInt(credentialValue, 10) : null,
+    proxy_jump_id: proxyJumpValue ? parseInt(proxyJumpValue, 10) : null,
     enabled: document.getElementById("server-enabled").checked,
   };
 
@@ -558,7 +624,7 @@ function renderServers() {
     <tr data-id="${s.id}">
       <td><strong>${escapeHtml(s.name)}</strong><div class="hint">${escapeHtml(s.ssh_user)}@${escapeHtml(s.host)}:${s.ssh_port} / 認証情報: ${
         s.credential_name ? escapeHtml(s.credential_name) : '<span style="color:var(--danger);">未設定</span>'
-      }</div></td>
+      }${s.proxy_jump_name ? ` / 踏み台: ${escapeHtml(s.proxy_jump_name)}経由` : ""}</div></td>
       <td>${escapeHtml(s.host)}</td>
       <td><span class="badge unknown" data-status-for="${s.id}">未確認</span></td>
       <td>${s.enabled ? '<span class="badge ok">有効</span>' : '<span class="badge disabled">無効</span>'}</td>
@@ -714,11 +780,23 @@ function openCredentialForm(credential) {
   document.getElementById("credential-secret").placeholder = credential
     ? "登録済みです。変更する場合のみ入力してください"
     : "";
+  document.getElementById("credential-secret-file").value = "";
   document.getElementById("credential-passphrase").value = "";
   document.getElementById("credential-form-error").textContent = "";
   updateCredentialAuthTypeUI();
   credentialFormBox.classList.remove("hidden");
 }
+
+document.getElementById("credential-secret-file").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById("credential-secret").value = String(reader.result || "").trim();
+  };
+  reader.onerror = () => showToast("ファイルの読み込みに失敗しました", "error");
+  reader.readAsText(file);
+});
 
 document.getElementById("credential-form-save-btn").addEventListener("click", async () => {
   const id = document.getElementById("credential-id").value;
@@ -865,6 +943,200 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
     } catch (err) {
       showToast(err.message, "error");
     }
+  }
+});
+
+// ============================================================
+// SSH config インポート
+// ============================================================
+let importParsed = null; // { hosts: [...], identity_files: [...] }
+
+document.getElementById("import-parse-btn").addEventListener("click", async () => {
+  const configText = document.getElementById("import-config-text").value;
+  const errorEl = document.getElementById("import-parse-error");
+  errorEl.textContent = "";
+  if (!configText.trim()) {
+    errorEl.textContent = "~/.ssh/config の内容を貼り付けてください";
+    return;
+  }
+  try {
+    importParsed = await api("/api/import/ssh-config/parse", {
+      method: "POST",
+      body: JSON.stringify({ config_text: configText }),
+    });
+    renderImportPreview();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+function renderImportPreview() {
+  document.getElementById("import-preview-box").classList.remove("hidden");
+  renderImportCredentialCards();
+  renderImportHostsTable();
+}
+
+function renderImportCredentialCards() {
+  const container = document.getElementById("import-credentials-list");
+  if (importParsed.identity_files.length === 0) {
+    container.innerHTML = '<p class="muted">秘密鍵ファイルの指定があるホストはありませんでした</p>';
+    return;
+  }
+  const existingOptions = state.credentials
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}(${c.auth_type === "key" ? "秘密鍵" : "パスワード"})</option>`)
+    .join("");
+
+  container.innerHTML = importParsed.identity_files.map((path, idx) => {
+    const baseName = path.split("/").pop() || path;
+    return `
+      <div class="card import-cred-card" data-identity-file="${escapeHtml(path)}" style="margin-bottom:10px;">
+        <div style="font-weight:600; font-family:monospace; word-break:break-all;">${escapeHtml(path)}</div>
+        <div class="radio-group" style="margin:8px 0;">
+          <label><input type="radio" name="cred-mode-${idx}" value="new" checked> 新規に取り込む</label>
+          <label><input type="radio" name="cred-mode-${idx}" value="existing" ${state.credentials.length ? "" : "disabled"}> 既存の認証情報を使う</label>
+          <label><input type="radio" name="cred-mode-${idx}" value="skip"> 認証情報なしで登録</label>
+        </div>
+        <div class="cred-new-box">
+          <label>認証情報名</label>
+          <input type="text" class="cred-name" value="${escapeHtml(baseName)}">
+          <label>認証方式</label>
+          <div class="radio-group">
+            <label><input type="radio" name="cred-authtype-${idx}" value="key" checked> 秘密鍵</label>
+            <label><input type="radio" name="cred-authtype-${idx}" value="password"> パスワード</label>
+          </div>
+          <label>ファイルから読み込む(任意)</label>
+          <input type="file" class="cred-file">
+          <label>秘密鍵(PEM) / パスワード</label>
+          <textarea class="cred-secret" rows="3" placeholder="ファイルを選択、または直接貼り付け"></textarea>
+          <label>秘密鍵のパスフレーズ(任意)</label>
+          <input type="password" class="cred-passphrase" placeholder="設定していない場合は空欄">
+        </div>
+        <div class="cred-existing-box hidden">
+          <label>既存の認証情報</label>
+          <select class="cred-existing-select">${existingOptions}</select>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".import-cred-card").forEach((card) => {
+    const newBox = card.querySelector(".cred-new-box");
+    const existingBox = card.querySelector(".cred-existing-box");
+    card.querySelectorAll('input[type="radio"][name^="cred-mode-"]').forEach((r) => {
+      r.addEventListener("change", () => {
+        const mode = card.querySelector('input[type="radio"][name^="cred-mode-"]:checked').value;
+        newBox.classList.toggle("hidden", mode !== "new");
+        existingBox.classList.toggle("hidden", mode !== "existing");
+      });
+    });
+    const fileInput = card.querySelector(".cred-file");
+    const secretTextarea = card.querySelector(".cred-secret");
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { secretTextarea.value = String(reader.result || "").trim(); };
+      reader.onerror = () => showToast("ファイルの読み込みに失敗しました", "error");
+      reader.readAsText(file);
+    });
+  });
+}
+
+function renderImportHostsTable() {
+  const tbody = document.getElementById("import-hosts-tbody");
+  tbody.innerHTML = importParsed.hosts.map((h) => `
+    <tr data-alias="${escapeHtml(h.alias)}">
+      <td><input type="checkbox" class="import-host-check" checked style="width:auto;"></td>
+      <td>${escapeHtml(h.alias)}</td>
+      <td>${escapeHtml(h.hostname)}:${h.port}${h.identity_file ? `<div class="hint">鍵: ${escapeHtml(h.identity_file)}</div>` : '<div class="hint" style="color:var(--warn);">鍵の指定なし</div>'}</td>
+      <td><input type="text" class="import-host-user" value="${escapeHtml(h.user || "")}" style="width:120px;"></td>
+      <td>${h.proxy_jump_alias ? escapeHtml(h.proxy_jump_alias) + "経由" : '<span class="muted">直接接続</span>'}</td>
+      <td><input type="text" class="import-host-name" value="${escapeHtml(h.alias)}" style="width:140px;"></td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("import-select-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".import-host-check").forEach((cb) => { cb.checked = e.target.checked; });
+});
+
+document.getElementById("import-apply-btn").addEventListener("click", async () => {
+  const errorEl = document.getElementById("import-apply-error");
+  errorEl.textContent = "";
+  if (!importParsed) return;
+
+  const credentials = [];
+  const credentialModeByFile = {};
+  document.querySelectorAll(".import-cred-card").forEach((card) => {
+    const path = card.dataset.identityFile;
+    const mode = card.querySelector('input[type="radio"][name^="cred-mode-"]:checked').value;
+    if (mode === "new") {
+      const secret = card.querySelector(".cred-secret").value;
+      if (secret.trim()) {
+        credentials.push({
+          identity_file: path,
+          name: card.querySelector(".cred-name").value.trim() || path,
+          auth_type: card.querySelector('input[type="radio"][name^="cred-authtype-"]:checked').value,
+          secret: secret.trim(),
+          passphrase: card.querySelector(".cred-passphrase").value || null,
+        });
+        credentialModeByFile[path] = { mode: "new" };
+      } else {
+        credentialModeByFile[path] = { mode: "skip" };
+      }
+    } else if (mode === "existing") {
+      const existingId = parseInt(card.querySelector(".cred-existing-select").value, 10);
+      credentialModeByFile[path] = { mode: "existing", existingId };
+    } else {
+      credentialModeByFile[path] = { mode: "skip" };
+    }
+  });
+
+  const hosts = [];
+  document.querySelectorAll("#import-hosts-tbody tr").forEach((tr) => {
+    const checkbox = tr.querySelector(".import-host-check");
+    if (!checkbox.checked) return;
+    const alias = tr.dataset.alias;
+    const parsedHost = importParsed.hosts.find((h) => h.alias === alias);
+    const name = tr.querySelector(".import-host-name").value.trim();
+    const sshUser = tr.querySelector(".import-host-user").value.trim();
+    if (!name || !sshUser) return;
+    const entry = {
+      alias,
+      name,
+      host: parsedHost.hostname,
+      ssh_port: parsedHost.port,
+      ssh_user: sshUser,
+      identity_file: parsedHost.identity_file || null,
+      proxy_jump_alias: parsedHost.proxy_jump_alias || null,
+    };
+    if (parsedHost.identity_file) {
+      const credMode = credentialModeByFile[parsedHost.identity_file];
+      if (credMode && credMode.mode === "existing") entry.credential_id = credMode.existingId;
+    }
+    hosts.push(entry);
+  });
+
+  if (hosts.length === 0) {
+    errorEl.textContent = "インポートするホストを1つ以上選択してください(登録名・SSHユーザーが空欄のホストは対象外です)";
+    return;
+  }
+
+  try {
+    const result = await api("/api/import/ssh-config/apply", {
+      method: "POST",
+      body: JSON.stringify({ credentials, hosts }),
+    });
+    let msg = `${result.created_servers}台のサーバーと${result.created_credentials}件の認証情報を取り込みました`;
+    if (result.skipped.length) msg += `\nスキップ: ${result.skipped.join("、 ")}`;
+    showToast(msg, result.skipped.length ? "" : "success");
+    document.getElementById("import-config-text").value = "";
+    document.getElementById("import-preview-box").classList.add("hidden");
+    importParsed = null;
+    await refreshCredentials();
+    await refreshServers();
+  } catch (err) {
+    errorEl.textContent = err.message;
   }
 });
 
