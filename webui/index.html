@@ -165,18 +165,41 @@
     z-index: 200; display: flex; align-items: center; justify-content: center;
   }
   #console-box {
-    width: min(1000px, 92vw); height: min(640px, 86vh);
+    width: min(1100px, 94vw); height: min(680px, 88vh);
     background: #1e1e1e; border-radius: 10px; overflow: hidden;
     display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.5);
   }
+  #console-tabbar {
+    display: flex; align-items: flex-end; gap: 2px;
+    padding: 8px 8px 0; background: #14161c; overflow-x: auto;
+  }
+  .console-tab-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: #23262f; color: #9ca3af; border: none;
+    border-radius: 6px 6px 0 0; padding: 7px 10px 7px 12px;
+    font-size: 12px; white-space: nowrap; max-width: 220px;
+  }
+  .console-tab-btn:hover { background: #2b2f3a; color: #e5e7eb; }
+  .console-tab-btn.active { background: #1e1e1e; color: #e5e7eb; }
+  .console-tab-btn .tab-label { overflow: hidden; text-overflow: ellipsis; }
+  .console-tab-btn .tab-close {
+    background: transparent; padding: 0 2px; font-size: 13px; line-height: 1;
+    color: #6b7280; border-radius: 4px;
+  }
+  .console-tab-btn .tab-close:hover { background: #4b5563; color: #fff; }
   #console-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 14px; background: #14161c; color: #e5e7eb; font-size: 13px;
+    padding: 8px 14px; background: #1e1e1e; color: #e5e7eb; font-size: 13px;
+    border-bottom: 1px solid #14161c;
   }
   #console-header .status { color: #9ca3af; }
   #console-close-btn { background: #374151; padding: 4px 12px; }
   #console-close-btn:hover { background: #4b5563; }
-  #console-term-container { flex: 1; padding: 8px; overflow: hidden; }
+  #console-panels { flex: 1; position: relative; overflow: hidden; }
+  .console-term-panel {
+    position: absolute; inset: 0; padding: 8px; overflow: hidden; display: none;
+  }
+  .console-term-panel.active { display: block; }
 </style>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 </head>
@@ -402,12 +425,13 @@
 <!-- ---------- Webコンソール ---------- -->
 <div id="console-overlay" class="hidden">
   <div id="console-box">
+    <div id="console-tabbar"></div>
     <div id="console-header">
       <span id="console-title">コンソール</span>
       <span class="status" id="console-status"></span>
-      <button id="console-close-btn">✕ 閉じる</button>
+      <button id="console-close-btn">✕ すべて閉じる</button>
     </div>
-    <div id="console-term-container"></div>
+    <div id="console-panels"></div>
   </div>
 </div>
 
@@ -672,28 +696,52 @@ document.getElementById("servers-tbody").addEventListener("click", async (e) => 
 });
 
 // ============================================================
-// Webコンソール
+// Webコンソール(複数タブ対応)
 // ============================================================
 const consoleOverlay = document.getElementById("console-overlay");
 const consoleStatusEl = document.getElementById("console-status");
-let consoleState = null; // { ws, term, fitAddon, resizeHandler }
+const consoleTitleEl = document.getElementById("console-title");
+const consoleTabbarEl = document.getElementById("console-tabbar");
+const consolePanelsEl = document.getElementById("console-panels");
+
+const consoleTabs = new Map(); // tabId -> { server, ws, term, fitAddon, tabButtonEl, panelEl, status }
+let activeConsoleTabId = null;
+let consoleResizeHandlerAttached = false;
+
+function findOpenTabIdForServer(serverId) {
+  for (const [tabId, tab] of consoleTabs) {
+    if (tab.server.id === serverId) return tabId;
+  }
+  return null;
+}
 
 async function openConsole(server) {
-  document.getElementById("console-title").textContent = `🖥 ${server.name} (${server.host})`;
-  consoleStatusEl.textContent = "接続準備中...";
-  consoleOverlay.classList.remove("hidden");
-
-  let ticket;
-  try {
-    const res = await api(`/api/servers/${server.id}/console-ticket`, { method: "POST" });
-    ticket = res.ticket;
-  } catch (err) {
-    consoleStatusEl.textContent = `エラー: ${err.message}`;
+  const existingTabId = findOpenTabIdForServer(server.id);
+  if (existingTabId) {
+    consoleOverlay.classList.remove("hidden");
+    activateConsoleTab(existingTabId);
     return;
   }
 
-  const container = document.getElementById("console-term-container");
-  container.innerHTML = "";
+  const tabId = `t${Date.now()}_${server.id}`;
+  consoleOverlay.classList.remove("hidden");
+
+  const tabButtonEl = document.createElement("button");
+  tabButtonEl.className = "console-tab-btn";
+  tabButtonEl.innerHTML = `<span class="tab-label">${escapeHtml(server.name)}</span><span class="tab-close" title="閉じる">✕</span>`;
+  tabButtonEl.addEventListener("click", (e) => {
+    if (e.target.closest(".tab-close")) {
+      closeConsoleTab(tabId);
+    } else {
+      activateConsoleTab(tabId);
+    }
+  });
+  consoleTabbarEl.appendChild(tabButtonEl);
+
+  const panelEl = document.createElement("div");
+  panelEl.className = "console-term-panel";
+  consolePanelsEl.appendChild(panelEl);
+
   const term = new Terminal({
     fontSize: 14,
     cursorBlink: true,
@@ -701,25 +749,43 @@ async function openConsole(server) {
   });
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
-  term.open(container);
-  fitAddon.fit();
-  term.focus();
+  term.open(panelEl);
+
+  const tab = { server, ws: null, term, fitAddon, tabButtonEl, panelEl, status: "接続準備中..." };
+  consoleTabs.set(tabId, tab);
+  activateConsoleTab(tabId);
+
+  let ticket;
+  try {
+    const res = await api(`/api/servers/${server.id}/console-ticket`, { method: "POST" });
+    ticket = res.ticket;
+  } catch (err) {
+    tab.status = `エラー: ${err.message}`;
+    if (activeConsoleTabId === tabId) consoleStatusEl.textContent = tab.status;
+    return;
+  }
 
   const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/console/${server.id}?ticket=${encodeURIComponent(ticket)}`);
   ws.binaryType = "arraybuffer";
+  tab.ws = ws;
 
-  const resizeHandler = () => {
+  const setStatus = (text) => {
+    tab.status = text;
+    if (activeConsoleTabId === tabId) consoleStatusEl.textContent = text;
+  };
+
+  const sendResize = () => {
     fitAddon.fit();
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ remoteman_console_control: "resize", cols: term.cols, rows: term.rows }));
     }
   };
-  window.addEventListener("resize", resizeHandler);
+  tab.sendResize = sendResize;
 
   ws.onopen = () => {
-    consoleStatusEl.textContent = "接続済み";
-    resizeHandler();
+    setStatus("接続済み");
+    if (activeConsoleTabId === tabId) sendResize();
   };
   ws.onmessage = (event) => {
     if (event.data instanceof ArrayBuffer) {
@@ -728,40 +794,84 @@ async function openConsole(server) {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === "error") {
-          consoleStatusEl.textContent = `エラー: ${payload.message}`;
+          setStatus(`エラー: ${payload.message}`);
           term.write(`\r\n\x1b[31m[remoteman] ${payload.message}\x1b[0m\r\n`);
         }
       } catch (e) { /* ignore */ }
     }
   };
   ws.onclose = () => {
-    consoleStatusEl.textContent = "切断されました";
+    setStatus("切断されました");
     term.write("\r\n\x1b[33m[remoteman] 接続が終了しました\x1b[0m\r\n");
   };
   ws.onerror = () => {
-    consoleStatusEl.textContent = "接続エラー";
+    setStatus("接続エラー");
   };
 
   term.onData((data) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(data);
   });
 
-  consoleState = { ws, term, fitAddon, resizeHandler };
+  if (!consoleResizeHandlerAttached) {
+    window.addEventListener("resize", () => {
+      if (activeConsoleTabId) {
+        const activeTab = consoleTabs.get(activeConsoleTabId);
+        if (activeTab && activeTab.sendResize) activeTab.sendResize();
+      }
+    });
+    consoleResizeHandlerAttached = true;
+  }
 }
 
-function closeConsole() {
-  if (!consoleState) {
-    consoleOverlay.classList.add("hidden");
-    return;
+function activateConsoleTab(tabId) {
+  const tab = consoleTabs.get(tabId);
+  if (!tab) return;
+  activeConsoleTabId = tabId;
+  for (const [id, t] of consoleTabs) {
+    const isActive = id === tabId;
+    t.tabButtonEl.classList.toggle("active", isActive);
+    t.panelEl.classList.toggle("active", isActive);
   }
-  window.removeEventListener("resize", consoleState.resizeHandler);
-  try { consoleState.ws.close(); } catch (e) { /* ignore */ }
-  try { consoleState.term.dispose(); } catch (e) { /* ignore */ }
-  consoleState = null;
+  consoleTitleEl.textContent = `🖥 ${tab.server.name} (${tab.server.host})`;
+  consoleStatusEl.textContent = tab.status;
+  if (tab.sendResize) tab.sendResize();
+  tab.term.focus();
+}
+
+function closeConsoleTab(tabId) {
+  const tab = consoleTabs.get(tabId);
+  if (!tab) return;
+  try { if (tab.ws) tab.ws.close(); } catch (e) { /* ignore */ }
+  try { tab.term.dispose(); } catch (e) { /* ignore */ }
+  tab.tabButtonEl.remove();
+  tab.panelEl.remove();
+  consoleTabs.delete(tabId);
+
+  if (activeConsoleTabId === tabId) {
+    activeConsoleTabId = null;
+    const remaining = Array.from(consoleTabs.keys());
+    if (remaining.length > 0) {
+      activateConsoleTab(remaining[remaining.length - 1]);
+    } else {
+      consoleOverlay.classList.add("hidden");
+    }
+  }
+}
+
+function closeAllConsoleTabs() {
+  for (const tabId of Array.from(consoleTabs.keys())) {
+    const tab = consoleTabs.get(tabId);
+    try { if (tab.ws) tab.ws.close(); } catch (e) { /* ignore */ }
+    try { tab.term.dispose(); } catch (e) { /* ignore */ }
+  }
+  consoleTabbarEl.innerHTML = "";
+  consolePanelsEl.innerHTML = "";
+  consoleTabs.clear();
+  activeConsoleTabId = null;
   consoleOverlay.classList.add("hidden");
 }
 
-document.getElementById("console-close-btn").addEventListener("click", closeConsole);
+document.getElementById("console-close-btn").addEventListener("click", closeAllConsoleTabs);
 
 // ============================================================
 // 認証情報管理
