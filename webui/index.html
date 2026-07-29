@@ -139,6 +139,7 @@
   .badge.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; }
   .badge.disabled { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
   .badge.unknown { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+  .badge.viaproxy { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
 
   .toast {
     position: fixed; bottom: 20px; right: 20px;
@@ -602,9 +603,18 @@ async function checkServerStatus(id) {
   badge.textContent = "確認中...";
   try {
     const res = await api(`/api/servers/${id}/status`);
-    badge.textContent = res.online ? "オンライン" : "オフライン";
-    badge.className = "badge " + (res.online ? "online" : "offline");
-    if (consoleBtn) consoleBtn.disabled = !res.online;
+    if (res.via_proxy_jump) {
+      // 踏み台経由のサーバーはremotemanから直接到達できるとは限らないため、
+      // オンライン/オフライン判定はせず、端末ボタンは常に利用可能にする
+      // (実際に接続できるかはSSH接続自体の成否で分かる)
+      badge.textContent = "踏み台経由";
+      badge.className = "badge viaproxy";
+      if (consoleBtn) consoleBtn.disabled = false;
+    } else {
+      badge.textContent = res.online ? "オンライン" : "オフライン";
+      badge.className = "badge " + (res.online ? "online" : "offline");
+      if (consoleBtn) consoleBtn.disabled = !res.online;
+    }
   } catch (err) {
     badge.textContent = "エラー";
     badge.className = "badge offline";

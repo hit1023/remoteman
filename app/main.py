@@ -361,7 +361,11 @@ def check_status(
     server = db.query(models.Server).filter(models.Server.id == server_id).first()
     if server is None:
         raise HTTPException(status_code=404, detail="サーバーが見つかりません")
-    return {"online": _tcp_ping(server.host, server.ssh_port or 22)}
+    if server.proxy_jump_id is not None:
+        # 踏み台経由のサーバーはremotemanコンテナから直接TCP到達できるとは限らない
+        # (踏み台の先にあるプライベートnetwork等)ため、直接pingでは判定しない。
+        return {"online": None, "via_proxy_jump": True}
+    return {"online": _tcp_ping(server.host, server.ssh_port or 22), "via_proxy_jump": False}
 
 
 def _tcp_ping(host: str, port: int, timeout: float = 2.0) -> bool:
