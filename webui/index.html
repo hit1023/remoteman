@@ -556,6 +556,7 @@ function openServerForm(server) {
   document.getElementById("server-enabled").checked = server ? server.enabled : true;
   document.getElementById("server-form-error").textContent = "";
   serverFormBox.classList.remove("hidden");
+  serverFormBox.scrollIntoView({ block: "start" });
 }
 
 document.getElementById("server-form-save-btn").addEventListener("click", async () => {
@@ -785,6 +786,7 @@ function openCredentialForm(credential) {
   document.getElementById("credential-form-error").textContent = "";
   updateCredentialAuthTypeUI();
   credentialFormBox.classList.remove("hidden");
+  credentialFormBox.scrollIntoView({ block: "start" });
 }
 
 document.getElementById("credential-secret-file").addEventListener("change", (e) => {
@@ -883,6 +885,7 @@ document.getElementById("show-add-user-btn").addEventListener("click", () => {
   document.getElementById("user-password").value = "";
   document.getElementById("user-form-error").textContent = "";
   userFormBox.classList.remove("hidden");
+  userFormBox.scrollIntoView({ block: "start" });
 });
 document.getElementById("user-form-cancel-btn").addEventListener("click", () => userFormBox.classList.add("hidden"));
 
