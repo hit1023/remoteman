@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>remoteman | ブラウザSSHターミナル</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0f14;
+    --card-bg: #171a21;
+    --surface-alt: #1f232c;
+    --border: #2a2f3a;
+    --text: #e5e7eb;
+    --text-muted: #9199a8;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --success: #22c55e;
+    --warn: #f59e0b;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .hidden { display: none !important; }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    font-size: 14px;
+    background: var(--primary);
+    color: #fff;
+    transition: background .15s;
+  }
+  button:hover { background: var(--primary-hover); }
+  button.secondary { background: #6b7280; }
+  button.secondary:hover { background: #4b5563; }
+  button.danger { background: var(--danger); }
+  button.danger:hover { background: var(--danger-hover); }
+  button.small { padding: 4px 10px; font-size: 12px; margin-right: 4px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--surface-alt);
+    color: var(--text);
+  }
+  label { display: block; font-size: 13px; color: var(--text-muted); margin: 10px 0 4px; }
+
+  /* ---------- login ---------- */
+  #login-view {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 32px 36px;
+    width: 320px;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,.5);
+  }
+  .login-box img.mascot { width: 96px; height: auto; margin-bottom: 6px; }
+  .login-box h1 { margin: 0 0 4px; font-size: 22px; }
+  .login-box p { color: var(--text-muted); margin: 0 0 20px; font-size: 13px; }
+  .login-box form { display: flex; flex-direction: column; gap: 10px; }
+  .login-box button { margin-top: 6px; padding: 10px; }
+  .error-text { color: var(--danger); font-size: 13px; min-height: 18px; margin: 10px 0 0; }
+
+  /* ---------- app shell ---------- */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 24px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; }
+  header .brand img { width: 34px; height: auto; }
+  header h1 { font-size: 18px; margin: 0; }
+  .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-muted); }
+
+  nav.tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 24px 0;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 10px 16px;
+  }
+  .tab-btn:hover { background: var(--surface-alt); color: var(--text); }
+  .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); background: var(--surface-alt); }
+
+  main, section.tab-content { padding: 20px 24px 60px; max-width: 1000px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .section-header h2 { font-size: 16px; margin: 0; }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .form-box { margin-bottom: 16px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .form-actions { margin-top: 16px; display: flex; gap: 8px; }
+  .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { background: var(--surface-alt); color: var(--text-muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+  .badge.ok, .badge.online { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+  .badge.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .badge.disabled { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+  .badge.unknown { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #1f2430; color: #fff; padding: 10px 16px;
+    border-radius: var(--radius); font-size: 13px; opacity: 0;
+    transform: translateY(10px); transition: all .2s; pointer-events: none; z-index: 100;
+    max-width: 360px; white-space: pre-wrap;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--success); }
+
+  .muted { color: var(--text-muted); }
+  .radio-group { display: flex; gap: 16px; margin-top: 6px; }
+  .radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); margin: 0; }
+  .radio-group input { width: auto; }
+
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:disabled:hover { filter: none; }
+
+  #console-overlay {
+    position: fixed; inset: 0; background: rgba(15, 18, 26, 0.85);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+  }
+  #console-box {
+    width: min(1000px, 92vw); height: min(640px, 86vh);
+    background: #1e1e1e; border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+  }
+  #console-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: #14161c; color: #e5e7eb; font-size: 13px;
+  }
+  #console-header .status { color: #9ca3af; }
+  #console-close-btn { background: #374151; padding: 4px 12px; }
+  #console-close-btn:hover { background: #4b5563; }
+  #console-term-container { flex: 1; padding: 8px; overflow: hidden; }
+</style>
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
+</head>
+<body>
+
+<!-- ============ ログイン画面 ============ -->
+<div id="login-view">
+  <div class="login-box">
+    <img class="mascot" src="/mascot.svg" alt="remoteman マスコット">
+    <h1>remoteman</h1>
+    <p>ブラウザだけで開くSSHターミナル</p>
+    <form id="login-form">
+      <input type="text" id="login-username" placeholder="ユーザー名" autocomplete="username" required>
+      <input type="password" id="login-password" placeholder="パスワード" autocomplete="current-password" required>
+      <button type="submit">ログイン</button>
+    </form>
+    <p id="login-error" class="error-text"></p>
+  </div>
+</div>
+
+<!-- ============ アプリ本体 ============ -->
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand">
+      <img src="/mascot.svg" alt="remoteman">
+      <h1>remoteman</h1>
+    </div>
+    <div class="header-right">
+      <span id="current-username"></span>
+      <button class="secondary small" id="logout-btn">ログアウト</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="servers">サーバー</button>
+    <button class="tab-btn" data-tab="credentials">認証情報</button>
+    <button class="tab-btn" data-tab="users">ユーザー管理</button>
+  </nav>
+
+  <main>
+    <!-- ---------- サーバー タブ ---------- -->
+    <section id="tab-servers" class="tab-content active">
+      <div class="section-header">
+        <h2>登録済みサーバー</h2>
+        <button id="show-add-server-btn">+ サーバーを登録</button>
+      </div>
+
+      <div id="server-form-box" class="card form-box hidden">
+        <h3 id="server-form-title">サーバーを登録</h3>
+        <input type="hidden" id="server-id">
+        <div class="form-grid">
+          <div>
+            <label>表示名</label>
+            <input type="text" id="server-name" placeholder="例: h-1" required>
+          </div>
+          <div>
+            <label>ホスト(IPアドレス / ホスト名)</label>
+            <input type="text" id="server-host" placeholder="例: 192.168.0.20" required>
+          </div>
+          <div>
+            <label>SSHポート</label>
+            <input type="number" id="server-ssh-port" value="22" required>
+          </div>
+          <div>
+            <label>SSHユーザー</label>
+            <input type="text" id="server-ssh-user" placeholder="例: hit" required>
+          </div>
+        </div>
+
+        <label>認証情報</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="server-credential" style="flex:1;">
+            <option value="">(未設定 — 端末を開くにはSSH認証情報が必要です)</option>
+          </select>
+          <button type="button" class="secondary small" id="server-credential-add-btn" style="white-space:nowrap;">+ 新規登録</button>
+        </div>
+        <div class="hint">SSHの秘密鍵/パスワードは「認証情報」タブでまとめて登録し、ここでは選択するだけです(複数サーバーで使い回せます)</div>
+
+        <label><input type="checkbox" id="server-enabled" checked style="width:auto;"> 有効化する</label>
+
+        <div class="form-actions">
+          <button id="server-form-save-btn">保存</button>
+          <button class="secondary" id="server-form-cancel-btn">キャンセル</button>
+        </div>
+        <p class="error-text" id="server-form-error"></p>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>名前</th><th>ホスト</th><th>状態</th><th>有効</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="servers-tbody"></tbody>
+      </table>
+    </section>
+
+    <!-- ---------- 認証情報 タブ ---------- -->
+    <section id="tab-credentials" class="tab-content">
+      <div class="section-header">
+        <h2>認証情報</h2>
+        <button id="show-add-credential-btn">+ 認証情報を登録</button>
+      </div>
+
+      <div id="credential-form-box" class="card form-box hidden">
+        <h3 id="credential-form-title">認証情報を登録</h3>
+        <input type="hidden" id="credential-id">
+        <label>名前</label>
+        <input type="text" id="credential-name" placeholder="例: 共通SSH鍵(hit)">
+
+        <label>認証方式</label>
+        <div class="radio-group">
+          <label><input type="radio" name="credential-auth-type" value="key" checked> 秘密鍵</label>
+          <label><input type="radio" name="credential-auth-type" value="password"> パスワード</label>
+        </div>
+
+        <label id="credential-secret-label">秘密鍵(PEM形式をそのまま貼り付け)</label>
+        <textarea id="credential-secret" rows="4" placeholder="編集時は空欄のままなら変更されません"></textarea>
+
+        <div id="credential-passphrase-box">
+          <label>秘密鍵のパスフレーズ(任意)</label>
+          <input type="password" id="credential-passphrase" placeholder="設定していない場合は空欄">
+        </div>
+
+        <div class="form-actions">
+          <button id="credential-form-save-btn">保存</button>
+          <button class="secondary" id="credential-form-cancel-btn">キャンセル</button>
+        </div>
+        <p class="error-text" id="credential-form-error"></p>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>名前</th><th>認証方式</th><th>作成日時</th><th>操作</th></tr>
+        </thead>
+        <tbody id="credentials-tbody"></tbody>
+      </table>
+    </section>
+
+    <!-- ---------- ユーザー管理 タブ ---------- -->
+    <section id="tab-users" class="tab-content">
+      <div class="section-header">
+        <h2>ユーザー管理</h2>
+        <button id="show-add-user-btn">+ ユーザーを追加</button>
+      </div>
+
+      <div id="user-form-box" class="card form-box hidden">
+        <h3>ユーザーを追加</h3>
+        <label>ユーザー名</label>
+        <input type="text" id="user-username">
+        <label>パスワード(8文字以上)</label>
+        <input type="password" id="user-password">
+        <div class="form-actions">
+          <button id="user-form-save-btn">追加</button>
+          <button class="secondary" id="user-form-cancel-btn">キャンセル</button>
+        </div>
+        <p class="error-text" id="user-form-error"></p>
+      </div>
+
+      <table>
+        <thead><tr><th>ユーザー名</th><th>作成日時</th><th>操作</th></tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ---------- Webコンソール ---------- -->
+<div id="console-overlay" class="hidden">
+  <div id="console-box">
+    <div id="console-header">
+      <span id="console-title">コンソール</span>
+      <span class="status" id="console-status"></span>
+      <button id="console-close-btn">✕ 閉じる</button>
+    </div>
+    <div id="console-term-container"></div>
+  </div>
+</div>
+
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/addon-fit.js"></script>
+<script>
+const TOKEN_KEY = "remoteman_token";
+const STATUS_POLL_INTERVAL_MS = 20000;
+const state = {
+  servers: [],
+  credentials: [],
+};
+let statusPollTimer = null;
+
+// ============================================================
+// API ヘルパー
+// ============================================================
+async function api(path, options = {}) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers = Object.assign(
+    { "Content-Type": "application/json" },
+    options.headers || {},
+    token ? { Authorization: `Bearer ${token}` } : {}
+  );
+  const res = await fetch(path, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    logout();
+    throw new Error("認証エラーです。再度ログインしてください。");
+  }
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data && data.detail ? data.detail : `エラーが発生しました (${res.status})`;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+function showToast(message, type = "") {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.className = "toast show " + type;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { toast.className = "toast " + type; }, 4000);
+}
+
+// ============================================================
+// 認証
+// ============================================================
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  const errorEl = document.getElementById("login-error");
+  errorEl.textContent = "";
+  try {
+    const data = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    await enterApp();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+document.getElementById("logout-btn").addEventListener("click", logout);
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  document.getElementById("app-view").classList.add("hidden");
+  document.getElementById("login-view").classList.remove("hidden");
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer);
+    statusPollTimer = null;
+  }
+}
+
+async function enterApp() {
+  const me = await api("/api/auth/me");
+  document.getElementById("current-username").textContent = `👤 ${me.username}`;
+  document.getElementById("login-view").classList.add("hidden");
+  document.getElementById("app-view").classList.remove("hidden");
+  await refreshCredentials();
+  await refreshServers();
+  await refreshUsers();
+
+  if (statusPollTimer) clearInterval(statusPollTimer);
+  statusPollTimer = setInterval(refreshAllStatuses, STATUS_POLL_INTERVAL_MS);
+}
+
+// ============================================================
+// タブ切り替え
+// ============================================================
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+  });
+});
+
+// ============================================================
+// サーバー管理
+// ============================================================
+const serverFormBox = document.getElementById("server-form-box");
+
+document.getElementById("show-add-server-btn").addEventListener("click", () => openServerForm());
+document.getElementById("server-form-cancel-btn").addEventListener("click", () => serverFormBox.classList.add("hidden"));
+
+document.getElementById("server-credential-add-btn").addEventListener("click", () => {
+  serverFormBox.classList.add("hidden");
+  document.querySelector('.tab-btn[data-tab="credentials"]').click();
+  openCredentialForm();
+});
+
+function renderServerCredentialOptions() {
+  const select = document.getElementById("server-credential");
+  const options = state.credentials
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}(${c.auth_type === "key" ? "秘密鍵" : "パスワード"})</option>`)
+    .join("");
+  select.innerHTML = `<option value="">(未設定 — 端末を開くにはSSH認証情報が必要です)</option>${options}`;
+}
+
+function openServerForm(server) {
+  document.getElementById("server-form-title").textContent = server ? "サーバーを編集" : "サーバーを登録";
+  document.getElementById("server-id").value = server ? server.id : "";
+  document.getElementById("server-name").value = server ? server.name : "";
+  document.getElementById("server-host").value = server ? server.host : "";
+  document.getElementById("server-ssh-port").value = server ? server.ssh_port : 22;
+  document.getElementById("server-ssh-user").value = server ? server.ssh_user : "";
+  renderServerCredentialOptions();
+  document.getElementById("server-credential").value = server && server.credential_id ? server.credential_id : "";
+  document.getElementById("server-enabled").checked = server ? server.enabled : true;
+  document.getElementById("server-form-error").textContent = "";
+  serverFormBox.classList.remove("hidden");
+}
+
+document.getElementById("server-form-save-btn").addEventListener("click", async () => {
+  const id = document.getElementById("server-id").value;
+  const credentialValue = document.getElementById("server-credential").value;
+  const payload = {
+    name: document.getElementById("server-name").value.trim(),
+    host: document.getElementById("server-host").value.trim(),
+    ssh_port: parseInt(document.getElementById("server-ssh-port").value, 10) || 22,
+    ssh_user: document.getElementById("server-ssh-user").value.trim(),
+    credential_id: credentialValue ? parseInt(credentialValue, 10) : null,
+    enabled: document.getElementById("server-enabled").checked,
+  };
+
+  const errorEl = document.getElementById("server-form-error");
+  errorEl.textContent = "";
+  try {
+    if (id) {
+      await api(`/api/servers/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      await api("/api/servers", { method: "POST", body: JSON.stringify(payload) });
+    }
+    serverFormBox.classList.add("hidden");
+    showToast("サーバー情報を保存しました", "success");
+    await refreshServers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+async function refreshServers() {
+  state.servers = await api("/api/servers");
+  renderServers();
+  refreshAllStatuses();
+}
+
+async function checkServerStatus(id) {
+  const badge = document.querySelector(`[data-status-for="${id}"]`);
+  const consoleBtn = document.querySelector(`[data-console-for="${id}"]`);
+  if (!badge) return;
+  badge.textContent = "確認中...";
+  try {
+    const res = await api(`/api/servers/${id}/status`);
+    badge.textContent = res.online ? "オンライン" : "オフライン";
+    badge.className = "badge " + (res.online ? "online" : "offline");
+    if (consoleBtn) consoleBtn.disabled = !res.online;
+  } catch (err) {
+    badge.textContent = "エラー";
+    badge.className = "badge offline";
+  }
+}
+
+async function refreshAllStatuses() {
+  await Promise.all(state.servers.map((s) => checkServerStatus(s.id)));
+}
+
+function renderServers() {
+  const tbody = document.getElementById("servers-tbody");
+  if (state.servers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">登録されているサーバーはありません</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.servers.map((s) => `
+    <tr data-id="${s.id}">
+      <td><strong>${escapeHtml(s.name)}</strong><div class="hint">${escapeHtml(s.ssh_user)}@${escapeHtml(s.host)}:${s.ssh_port} / 認証情報: ${
+        s.credential_name ? escapeHtml(s.credential_name) : '<span style="color:var(--danger);">未設定</span>'
+      }</div></td>
+      <td>${escapeHtml(s.host)}</td>
+      <td><span class="badge unknown" data-status-for="${s.id}">未確認</span></td>
+      <td>${s.enabled ? '<span class="badge ok">有効</span>' : '<span class="badge disabled">無効</span>'}</td>
+      <td>
+        <button class="small" data-action="console" data-id="${s.id}" data-console-for="${s.id}" disabled title="オンライン時のみ利用できます">端末</button>
+        <button class="small secondary" data-action="edit" data-id="${s.id}">編集</button>
+        <button class="small danger" data-action="delete" data-id="${s.id}">削除</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("servers-tbody").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn || btn.disabled) return;
+  const id = btn.dataset.id;
+  const server = state.servers.find((s) => String(s.id) === id);
+  const action = btn.dataset.action;
+
+  if (action === "edit") return openServerForm(server);
+
+  if (action === "delete") {
+    if (!confirm(`「${server.name}」を削除しますか?`)) return;
+    await api(`/api/servers/${id}`, { method: "DELETE" });
+    showToast("削除しました", "success");
+    await refreshServers();
+    return;
+  }
+
+  if (action === "console") {
+    openConsole(server);
+    return;
+  }
+});
+
+// ============================================================
+// Webコンソール
+// ============================================================
+const consoleOverlay = document.getElementById("console-overlay");
+const consoleStatusEl = document.getElementById("console-status");
+let consoleState = null; // { ws, term, fitAddon, resizeHandler }
+
+async function openConsole(server) {
+  document.getElementById("console-title").textContent = `🖥 ${server.name} (${server.host})`;
+  consoleStatusEl.textContent = "接続準備中...";
+  consoleOverlay.classList.remove("hidden");
+
+  let ticket;
+  try {
+    const res = await api(`/api/servers/${server.id}/console-ticket`, { method: "POST" });
+    ticket = res.ticket;
+  } catch (err) {
+    consoleStatusEl.textContent = `エラー: ${err.message}`;
+    return;
+  }
+
+  const container = document.getElementById("console-term-container");
+  container.innerHTML = "";
+  const term = new Terminal({
+    fontSize: 14,
+    cursorBlink: true,
+    theme: { background: "#1e1e1e" },
+  });
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(container);
+  fitAddon.fit();
+  term.focus();
+
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/console/${server.id}?ticket=${encodeURIComponent(ticket)}`);
+  ws.binaryType = "arraybuffer";
+
+  const resizeHandler = () => {
+    fitAddon.fit();
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ remoteman_console_control: "resize", cols: term.cols, rows: term.rows }));
+    }
+  };
+  window.addEventListener("resize", resizeHandler);
+
+  ws.onopen = () => {
+    consoleStatusEl.textContent = "接続済み";
+    resizeHandler();
+  };
+  ws.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer) {
+      term.write(new Uint8Array(event.data));
+    } else {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "error") {
+          consoleStatusEl.textContent = `エラー: ${payload.message}`;
+          term.write(`\r\n\x1b[31m[remoteman] ${payload.message}\x1b[0m\r\n`);
+        }
+      } catch (e) { /* ignore */ }
+    }
+  };
+  ws.onclose = () => {
+    consoleStatusEl.textContent = "切断されました";
+    term.write("\r\n\x1b[33m[remoteman] 接続が終了しました\x1b[0m\r\n");
+  };
+  ws.onerror = () => {
+    consoleStatusEl.textContent = "接続エラー";
+  };
+
+  term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+  });
+
+  consoleState = { ws, term, fitAddon, resizeHandler };
+}
+
+function closeConsole() {
+  if (!consoleState) {
+    consoleOverlay.classList.add("hidden");
+    return;
+  }
+  window.removeEventListener("resize", consoleState.resizeHandler);
+  try { consoleState.ws.close(); } catch (e) { /* ignore */ }
+  try { consoleState.term.dispose(); } catch (e) { /* ignore */ }
+  consoleState = null;
+  consoleOverlay.classList.add("hidden");
+}
+
+document.getElementById("console-close-btn").addEventListener("click", closeConsole);
+
+// ============================================================
+// 認証情報管理
+// ============================================================
+const credentialFormBox = document.getElementById("credential-form-box");
+
+document.getElementById("show-add-credential-btn").addEventListener("click", () => openCredentialForm());
+document.getElementById("credential-form-cancel-btn").addEventListener("click", () => credentialFormBox.classList.add("hidden"));
+
+document.querySelectorAll('input[name="credential-auth-type"]').forEach((el) => {
+  el.addEventListener("change", updateCredentialAuthTypeUI);
+});
+
+function updateCredentialAuthTypeUI() {
+  const type = document.querySelector('input[name="credential-auth-type"]:checked').value;
+  document.getElementById("credential-secret-label").textContent =
+    type === "key" ? "秘密鍵(PEM形式をそのまま貼り付け)" : "SSHパスワード";
+  document.getElementById("credential-passphrase-box").classList.toggle("hidden", type !== "key");
+}
+
+function openCredentialForm(credential) {
+  document.getElementById("credential-form-title").textContent = credential ? "認証情報を編集" : "認証情報を登録";
+  document.getElementById("credential-id").value = credential ? credential.id : "";
+  document.getElementById("credential-name").value = credential ? credential.name : "";
+  document.querySelector(`input[name="credential-auth-type"][value="${credential ? credential.auth_type : "key"}"]`).checked = true;
+  document.getElementById("credential-secret").value = "";
+  document.getElementById("credential-secret").placeholder = credential
+    ? "登録済みです。変更する場合のみ入力してください"
+    : "";
+  document.getElementById("credential-passphrase").value = "";
+  document.getElementById("credential-form-error").textContent = "";
+  updateCredentialAuthTypeUI();
+  credentialFormBox.classList.remove("hidden");
+}
+
+document.getElementById("credential-form-save-btn").addEventListener("click", async () => {
+  const id = document.getElementById("credential-id").value;
+  const payload = {
+    name: document.getElementById("credential-name").value.trim(),
+    auth_type: document.querySelector('input[name="credential-auth-type"]:checked').value,
+  };
+  const secret = document.getElementById("credential-secret").value;
+  if (secret) payload.secret = secret;
+  const passphrase = document.getElementById("credential-passphrase").value;
+  if (passphrase) payload.passphrase = passphrase;
+
+  const errorEl = document.getElementById("credential-form-error");
+  errorEl.textContent = "";
+  if (!id && !secret) {
+    errorEl.textContent = "秘密鍵またはパスワードを入力してください";
+    return;
+  }
+  try {
+    if (id) {
+      await api(`/api/credentials/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      await api("/api/credentials", { method: "POST", body: JSON.stringify(payload) });
+    }
+    credentialFormBox.classList.add("hidden");
+    showToast("認証情報を保存しました", "success");
+    await refreshCredentials();
+    await refreshServers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+async function refreshCredentials() {
+  state.credentials = await api("/api/credentials");
+  renderCredentials();
+}
+
+function renderCredentials() {
+  const tbody = document.getElementById("credentials-tbody");
+  if (state.credentials.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">登録されている認証情報はありません</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.credentials.map((c) => `
+    <tr data-id="${c.id}">
+      <td><strong>${escapeHtml(c.name)}</strong></td>
+      <td>${c.auth_type === "key" ? "秘密鍵" : "パスワード"}</td>
+      <td>${formatDateTime(c.created_at)}</td>
+      <td>
+        <button class="small secondary" data-action="edit" data-id="${c.id}">編集</button>
+        <button class="small danger" data-action="delete" data-id="${c.id}">削除</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("credentials-tbody").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const credential = state.credentials.find((c) => String(c.id) === id);
+
+  if (btn.dataset.action === "edit") return openCredentialForm(credential);
+
+  if (btn.dataset.action === "delete") {
+    if (!confirm(`「${credential.name}」を削除しますか?`)) return;
+    try {
+      await api(`/api/credentials/${id}`, { method: "DELETE" });
+      showToast("削除しました", "success");
+      await refreshCredentials();
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+});
+
+// ============================================================
+// ユーザー管理
+// ============================================================
+const userFormBox = document.getElementById("user-form-box");
+document.getElementById("show-add-user-btn").addEventListener("click", () => {
+  document.getElementById("user-username").value = "";
+  document.getElementById("user-password").value = "";
+  document.getElementById("user-form-error").textContent = "";
+  userFormBox.classList.remove("hidden");
+});
+document.getElementById("user-form-cancel-btn").addEventListener("click", () => userFormBox.classList.add("hidden"));
+
+document.getElementById("user-form-save-btn").addEventListener("click", async () => {
+  const payload = {
+    username: document.getElementById("user-username").value.trim(),
+    password: document.getElementById("user-password").value,
+  };
+  const errorEl = document.getElementById("user-form-error");
+  errorEl.textContent = "";
+  try {
+    await api("/api/users", { method: "POST", body: JSON.stringify(payload) });
+    userFormBox.classList.add("hidden");
+    showToast("ユーザーを追加しました", "success");
+    await refreshUsers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+async function refreshUsers() {
+  const users = await api("/api/users");
+  const tbody = document.getElementById("users-tbody");
+  tbody.innerHTML = users.map((u) => `
+    <tr data-id="${u.id}">
+      <td>${escapeHtml(u.username)}</td>
+      <td>${formatDateTime(u.created_at)}</td>
+      <td>
+        <button class="small secondary" data-action="passwd" data-id="${u.id}">パスワード変更</button>
+        <button class="small danger" data-action="delete" data-id="${u.id}">削除</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("users-tbody").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+
+  if (btn.dataset.action === "passwd") {
+    const newPassword = prompt("新しいパスワード(8文字以上)を入力してください");
+    if (!newPassword) return;
+    try {
+      await api(`/api/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password: newPassword }) });
+      showToast("パスワードを変更しました", "success");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  if (btn.dataset.action === "delete") {
+    if (!confirm("このユーザーを削除しますか?")) return;
+    try {
+      await api(`/api/users/${id}`, { method: "DELETE" });
+      showToast("削除しました", "success");
+      await refreshUsers();
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+});
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function formatDateTime(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+  return d.toLocaleString("ja-JP");
+}
+
+// ============================================================
+// 起動処理
+// ============================================================
+(async function init() {
+  if (localStorage.getItem(TOKEN_KEY)) {
+    try {
+      await enterApp();
+    } catch (err) {
+      logout();
+    }
+  }
+})();
+</script>
+</body>
+</html>
