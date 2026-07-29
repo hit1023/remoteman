@@ -195,6 +195,11 @@
   #console-header .status { color: #9ca3af; }
   #console-close-btn { background: #374151; padding: 4px 12px; }
   #console-close-btn:hover { background: #4b5563; }
+  #console-restore-btn {
+    position: fixed; right: 24px; bottom: 24px; z-index: 199;
+    padding: 10px 18px; border-radius: 100px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  }
   #console-panels { flex: 1; position: relative; overflow: hidden; }
   .console-term-panel {
     position: absolute; inset: 0; padding: 8px; overflow: hidden; display: none;
@@ -427,13 +432,20 @@
   <div id="console-box">
     <div id="console-tabbar"></div>
     <div id="console-header">
-      <span id="console-title">コンソール</span>
-      <span class="status" id="console-status"></span>
-      <button id="console-close-btn">✕ すべて閉じる</button>
+      <div>
+        <span id="console-title">コンソール</span>
+        <span class="status" id="console-status"></span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="secondary small" id="console-minimize-btn" title="接続を維持したままサーバー一覧に戻る">－ 最小化</button>
+        <button id="console-close-btn">✕ すべて閉じる</button>
+      </div>
     </div>
     <div id="console-panels"></div>
   </div>
 </div>
+
+<button id="console-restore-btn" class="hidden">🖥 端末を表示</button>
 
 <script src="/vendor/xterm/xterm.js"></script>
 <script src="/vendor/xterm/addon-fit.js"></script>
@@ -703,6 +715,7 @@ const consoleStatusEl = document.getElementById("console-status");
 const consoleTitleEl = document.getElementById("console-title");
 const consoleTabbarEl = document.getElementById("console-tabbar");
 const consolePanelsEl = document.getElementById("console-panels");
+const consoleRestoreBtn = document.getElementById("console-restore-btn");
 
 const consoleTabs = new Map(); // tabId -> { server, ws, term, fitAddon, tabButtonEl, panelEl, status }
 let activeConsoleTabId = null;
@@ -715,16 +728,45 @@ function findOpenTabIdForServer(serverId) {
   return null;
 }
 
+function updateConsoleRestoreBtn() {
+  const hasTabs = consoleTabs.size > 0;
+  const isMinimized = consoleOverlay.classList.contains("hidden");
+  if (hasTabs && isMinimized) {
+    consoleRestoreBtn.textContent = `🖥 端末を表示(${consoleTabs.size})`;
+    consoleRestoreBtn.classList.remove("hidden");
+  } else {
+    consoleRestoreBtn.classList.add("hidden");
+  }
+}
+
+function showConsoleOverlay() {
+  consoleOverlay.classList.remove("hidden");
+  updateConsoleRestoreBtn();
+  if (activeConsoleTabId) {
+    const tab = consoleTabs.get(activeConsoleTabId);
+    if (tab && tab.sendResize) tab.sendResize();
+    if (tab) tab.term.focus();
+  }
+}
+
+function minimizeConsoleOverlay() {
+  consoleOverlay.classList.add("hidden");
+  updateConsoleRestoreBtn();
+}
+
+document.getElementById("console-minimize-btn").addEventListener("click", minimizeConsoleOverlay);
+consoleRestoreBtn.addEventListener("click", showConsoleOverlay);
+
 async function openConsole(server) {
   const existingTabId = findOpenTabIdForServer(server.id);
   if (existingTabId) {
-    consoleOverlay.classList.remove("hidden");
+    showConsoleOverlay();
     activateConsoleTab(existingTabId);
     return;
   }
 
   const tabId = `t${Date.now()}_${server.id}`;
-  consoleOverlay.classList.remove("hidden");
+  showConsoleOverlay();
 
   const tabButtonEl = document.createElement("button");
   tabButtonEl.className = "console-tab-btn";
@@ -856,6 +898,7 @@ function closeConsoleTab(tabId) {
       consoleOverlay.classList.add("hidden");
     }
   }
+  updateConsoleRestoreBtn();
 }
 
 function closeAllConsoleTabs() {
@@ -869,6 +912,7 @@ function closeAllConsoleTabs() {
   consoleTabs.clear();
   activeConsoleTabId = null;
   consoleOverlay.classList.add("hidden");
+  updateConsoleRestoreBtn();
 }
 
 document.getElementById("console-close-btn").addEventListener("click", closeAllConsoleTabs);
