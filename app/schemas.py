@@ -137,3 +137,15 @@ class SshConfigImportResult(BaseModel):
     created_servers: int
     created_credentials: int
     skipped: list[str]
+
+
+# ---------- access logs ----------
+class AccessLogOut(BaseModel):
+    id: int
+    created_at: datetime
+    username: str
+    server_id: Optional[int] = None
+    server_name: str
+    client_ip: str
+    success: bool
+    detail: Optional[str] = None

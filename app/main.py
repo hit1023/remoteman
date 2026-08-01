@@ -377,6 +377,25 @@ def _tcp_ping(host: str, port: int, timeout: float = 2.0) -> bool:
 
 
 # ============================================================
+# access logs
+# ============================================================
+@app.get("/api/access-logs", response_model=list[schemas.AccessLogOut])
+def list_access_logs(
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    _current_user: models.User = Depends(auth.get_current_user),
+):
+    limit = max(1, min(limit, 1000))
+    logs = (
+        db.query(models.AccessLog)
+        .order_by(models.AccessLog.created_at.desc(), models.AccessLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return logs
+
+
+# ============================================================
 # static webui (SPA) — 必ずAPIルートの後に登録すること
 # ============================================================
 app.mount("/", StaticFiles(directory="/webui", html=True), name="webui")

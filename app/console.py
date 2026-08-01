@@ -40,6 +40,40 @@ def _consume_ticket(ticket: str, server_id: int) -> Optional[str]:
     return data["username"]
 
 
+def _client_ip(websocket: WebSocket) -> str:
+    forwarded = websocket.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = websocket.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return websocket.client.host if websocket.client else "unknown"
+
+
+def _record_access_log(
+    username: str,
+    server_id: Optional[int],
+    server_name: str,
+    client_ip: str,
+    success: bool,
+    detail: Optional[str] = None,
+) -> None:
+    db = SessionLocal()
+    try:
+        log = models.AccessLog(
+            username=username,
+            server_id=server_id,
+            server_name=server_name,
+            client_ip=client_ip,
+            success=success,
+            detail=detail,
+        )
+        db.add(log)
+        db.commit()
+    finally:
+        db.close()
+
+
 @router.post("/api/servers/{server_id}/console-ticket")
 def create_console_ticket(
     server_id: int,
@@ -66,6 +100,7 @@ async def _send_error(websocket: WebSocket, message: str) -> None:
 @router.websocket("/ws/console/{server_id}")
 async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = Query(...)):
     await websocket.accept()
+    client_ip = _client_ip(websocket)
 
     username = _consume_ticket(ticket, server_id)
     if username is None:
@@ -77,6 +112,10 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
     try:
         server = db.query(models.Server).filter(models.Server.id == server_id).first()
         if server is None or server.credential is None:
+            _record_access_log(
+                username, server_id, server.name if server else f"#{server_id}", client_ip,
+                False, "サーバーまたは認証情報が見つかりません",
+            )
             await _send_error(websocket, "サーバーまたは認証情報が見つかりません")
             await websocket.close()
             return
@@ -84,6 +123,7 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
         try:
             clients = ssh_connect.open_chain(server)
         except ssh_connect.ChainError as e:
+            _record_access_log(username, server_id, server_name, client_ip, False, str(e))
             await _send_error(websocket, str(e))
             await websocket.close()
             return
@@ -98,10 +138,12 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
         channel.settimeout(0.0)
     except Exception as e:
         ssh_connect.close_chain(clients)
+        _record_access_log(username, server_id, server_name, client_ip, False, f"SSH接続に失敗しました: {e}")
         await _send_error(websocket, f"SSH接続に失敗しました: {e}")
         await websocket.close()
         return
 
+    _record_access_log(username, server_id, server_name, client_ip, True)
     logger.info("コンソール接続開始: %s (サーバー: %s, ユーザー: %s, 経由数: %d)", host, server_name, username, len(clients) - 1)
 
     loop = asyncio.get_event_loop()

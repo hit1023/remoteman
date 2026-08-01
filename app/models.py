@@ -47,3 +47,16 @@ class Server(Base):
 
     credential = relationship("Credential", back_populates="servers")
     proxy_jump = relationship("Server", remote_side=[id])
+
+
+class AccessLog(Base):
+    __tablename__ = "access_logs"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    username = Column(String, nullable=False)
+    server_id = Column(Integer, ForeignKey("servers.id"), nullable=True)
+    server_name = Column(String, nullable=False)
+    client_ip = Column(String, nullable=False)
+    success = Column(Boolean, nullable=False, default=True)
+    detail = Column(String, nullable=True)
