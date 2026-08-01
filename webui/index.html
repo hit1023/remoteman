@@ -607,7 +607,9 @@ async function api(path, options = {}) {
     token ? { Authorization: `Bearer ${token}` } : {}
   );
   const res = await fetch(path, Object.assign({}, options, { headers }));
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
+    // トークン付きリクエストが401ということは、セッション切れ(トークン無効/期限切れ)。
+    // ログイン試行自体の401(ユーザー名/パスワード違い)はここでは扱わず、下の通常のエラー処理に委ねる。
     logout();
     throw new Error("認証エラーです。再度ログインしてください。");
   }
