@@ -4,13 +4,14 @@ import socket
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import auth, console, crypto, import_ssh, models, schemas
 from .database import Base, SessionLocal, engine, get_db
+from .netutil import get_client_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("remoteman")
@@ -62,9 +63,23 @@ app.include_router(import_ssh.router)
 # ============================================================
 # auth
 # ============================================================
+def _record_login_log(
+    db: Session,
+    username: str,
+    client_ip: str,
+    success: bool,
+    detail: Optional[str] = None,
+) -> None:
+    log = models.LoginLog(username=username, client_ip=client_ip, success=success, detail=detail)
+    db.add(log)
+    db.commit()
+
+
 @app.post("/api/auth/login", response_model=schemas.TokenResponse)
-def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
+def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(request)
     if auth.is_locked_out(payload.username):
+        _record_login_log(db, payload.username, client_ip, False, "ロックアウト中(試行回数超過)")
         raise HTTPException(
             status_code=429,
             detail=f"ログイン試行回数が上限を超えました。{auth.LOCKOUT_MINUTES}分待ってから再試行してください。",
@@ -72,8 +87,10 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == payload.username).first()
     if user is None or not auth.verify_password(payload.password, user.password_hash):
         auth.record_failed_attempt(payload.username)
+        _record_login_log(db, payload.username, client_ip, False, "ユーザー名またはパスワードが違います")
         raise HTTPException(status_code=401, detail="ユーザー名またはパスワードが違います")
     auth.clear_failed_attempts(payload.username)
+    _record_login_log(db, payload.username, client_ip, True)
     token = auth.create_access_token(user.username)
     return schemas.TokenResponse(access_token=token)
 
@@ -389,6 +406,22 @@ def list_access_logs(
     logs = (
         db.query(models.AccessLog)
         .order_by(models.AccessLog.created_at.desc(), models.AccessLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return logs
+
+
+@app.get("/api/login-logs", response_model=list[schemas.LoginLogOut])
+def list_login_logs(
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    _current_user: models.User = Depends(auth.get_current_user),
+):
+    limit = max(1, min(limit, 1000))
+    logs = (
+        db.query(models.LoginLog)
+        .order_by(models.LoginLog.created_at.desc(), models.LoginLog.id.desc())
         .limit(limit)
         .all()
     )

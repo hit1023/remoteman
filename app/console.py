@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from . import auth, models, ssh_connect
 from .database import SessionLocal, get_db
+from .netutil import get_client_ip
 
 logger = logging.getLogger("remoteman.console")
 
@@ -38,16 +39,6 @@ def _consume_ticket(ticket: str, server_id: int) -> Optional[str]:
     if data["expires"] < time.time() or data["server_id"] != server_id:
         return None
     return data["username"]
-
-
-def _client_ip(websocket: WebSocket) -> str:
-    forwarded = websocket.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = websocket.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return websocket.client.host if websocket.client else "unknown"
 
 
 def _record_access_log(
@@ -100,7 +91,7 @@ async def _send_error(websocket: WebSocket, message: str) -> None:
 @router.websocket("/ws/console/{server_id}")
 async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = Query(...)):
     await websocket.accept()
-    client_ip = _client_ip(websocket)
+    client_ip = get_client_ip(websocket)
 
     username = _consume_ticket(ticket, server_id)
     if username is None:

@@ -60,3 +60,14 @@ class AccessLog(Base):
     client_ip = Column(String, nullable=False)
     success = Column(Boolean, nullable=False, default=True)
     detail = Column(String, nullable=True)
+
+
+class LoginLog(Base):
+    __tablename__ = "login_logs"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    username = Column(String, nullable=False)
+    client_ip = Column(String, nullable=False)
+    success = Column(Boolean, nullable=False, default=True)
+    detail = Column(String, nullable=True)

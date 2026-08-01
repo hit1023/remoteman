@@ -149,3 +149,13 @@ class AccessLogOut(BaseModel):
     client_ip: str
     success: bool
     detail: Optional[str] = None
+
+
+# ---------- login logs ----------
+class LoginLogOut(BaseModel):
+    id: int
+    created_at: datetime
+    username: str
+    client_ip: str
+    success: bool
+    detail: Optional[str] = None

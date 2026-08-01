@@ -533,7 +533,21 @@
       </div>
 
       <div class="section-header">
-        <h3 style="margin:0;">アクセスログ</h3>
+        <h3 style="margin:0;">ログイン履歴</h3>
+        <button class="secondary small" id="refresh-login-logs-btn">更新</button>
+      </div>
+      <div class="hint" style="margin-bottom:10px;">このWebUIへのログイン試行の履歴です(成功・失敗とも記録、直近200件)</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>日時</th><th>ユーザー名</th><th>接続元IP</th><th>結果</th></tr>
+          </thead>
+          <tbody id="login-logs-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="section-header" style="margin-top:24px;">
+        <h3 style="margin:0;">アクセスログ(SSH端末)</h3>
         <button class="secondary small" id="refresh-access-logs-btn">更新</button>
       </div>
       <div class="hint" style="margin-bottom:10px;">この画面を経由してSSH端末に接続した履歴です(直近200件)</div>
@@ -669,7 +683,10 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-    if (btn.dataset.tab === "settings") refreshAccessLogs();
+    if (btn.dataset.tab === "settings") {
+      refreshLoginLogs();
+      refreshAccessLogs();
+    }
   });
 });
 
@@ -688,6 +705,35 @@ themeSelect.addEventListener("change", () => {
     document.documentElement.removeAttribute("data-theme");
   }
 });
+
+// ============================================================
+// ログイン履歴
+// ============================================================
+document.getElementById("refresh-login-logs-btn").addEventListener("click", refreshLoginLogs);
+
+async function refreshLoginLogs() {
+  const tbody = document.getElementById("login-logs-tbody");
+  try {
+    const logs = await api("/api/login-logs");
+    if (logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">ログイン履歴はまだありません</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = logs.map((l) => `
+      <tr>
+        <td>${formatDateTime(l.created_at)}</td>
+        <td>${escapeHtml(l.username)}</td>
+        <td>${escapeHtml(l.client_ip)}</td>
+        <td>${l.success
+          ? '<span class="badge ok">成功</span>'
+          : `<span class="badge offline" title="${escapeHtml(l.detail || "")}">失敗</span>`
+        }</td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="error-text">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
 
 // ============================================================
 // アクセスログ
