@@ -398,6 +398,11 @@ def _tcp_ping(host: str, port: int, timeout: float = 2.0) -> bool:
 # ============================================================
 # ssh config export
 # ============================================================
+def _identity_file_path(credential_name: str) -> str:
+    path = f"~/.ssh/{credential_name}"
+    return f'"{path}"' if " " in path else path
+
+
 @app.get("/api/export/ssh-config", response_class=PlainTextResponse)
 def export_ssh_config(
     db: Session = Depends(get_db),
@@ -407,8 +412,9 @@ def export_ssh_config(
     lines = [
         "# remotemanからエクスポートしたSSH設定",
         f"# 生成日時: {datetime.datetime.utcnow().isoformat()}Z",
-        "# 秘密鍵/パスワードは含まれません(remotemanはこれらを平文で出力しない設計です)。",
-        "# IdentityFileは実際の環境に合わせてパスを設定してください。",
+        "# 秘密鍵の中身/パスワードは含まれません(remotemanはこれらを平文で出力しない設計です)。",
+        "# IdentityFileは認証情報名をもとにしたパスです。実際の鍵ファイルを ~/.ssh/ 以下に",
+        "# 同名で配置してください(パスワード認証のサーバーにはIdentityFileを出力しません)。",
         "",
     ]
     for server in servers:
@@ -419,8 +425,10 @@ def export_ssh_config(
         if server.proxy_jump:
             lines.append(f"    ProxyJump {server.proxy_jump.name}")
         if server.credential:
-            auth_label = "秘密鍵" if server.credential.auth_type == "key" else "パスワード"
-            lines.append(f"    # 認証情報(remoteman管理): {server.credential.name} [{auth_label}]")
+            if server.credential.auth_type == "key":
+                lines.append(f"    IdentityFile {_identity_file_path(server.credential.name)}")
+            else:
+                lines.append(f"    # 認証方式: パスワード認証(remoteman管理の認証情報「{server.credential.name}」)")
         else:
             lines.append("    # 認証情報: 未設定")
         if not server.enabled:
