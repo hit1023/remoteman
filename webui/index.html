@@ -445,6 +445,15 @@
 
     <!-- ---------- インポート タブ ---------- -->
     <section id="tab-import" class="tab-content">
+      <div class="section-header"><h2>config形式でエクスポート</h2></div>
+
+      <div class="card">
+        <p class="hint">登録済みのサーバー一覧を <code>~/.ssh/config</code> 形式のテキストとしてダウンロードします。秘密鍵/パスワードは含まれません(認証情報名はコメントとして記載されるのみです)。</p>
+        <div class="form-actions">
+          <button id="export-config-btn">config形式でダウンロード</button>
+        </div>
+      </div>
+
       <div class="section-header"><h2>~/.ssh/config から一括インポート</h2></div>
 
       <div class="card">
@@ -1334,6 +1343,36 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
     } catch (err) {
       showToast(err.message, "error");
     }
+  }
+});
+
+// ============================================================
+// SSH config エクスポート
+// ============================================================
+document.getElementById("export-config-btn").addEventListener("click", async () => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  try {
+    const res = await fetch("/api/export/ssh-config", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.status === 401) {
+      logout();
+      throw new Error("認証エラーです。再度ログインしてください。");
+    }
+    if (!res.ok) throw new Error(`エラーが発生しました (${res.status})`);
+    const text = await res.text();
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "remoteman-ssh-config.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("エクスポートしました", "success");
+  } catch (err) {
+    showToast(err.message, "error");
   }
 });
 

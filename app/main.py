@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import socket
@@ -5,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -391,6 +393,40 @@ def _tcp_ping(host: str, port: int, timeout: float = 2.0) -> bool:
             return True
     except OSError:
         return False
+
+
+# ============================================================
+# ssh config export
+# ============================================================
+@app.get("/api/export/ssh-config", response_class=PlainTextResponse)
+def export_ssh_config(
+    db: Session = Depends(get_db),
+    _current_user: models.User = Depends(auth.get_current_user),
+):
+    servers = db.query(models.Server).order_by(models.Server.name).all()
+    lines = [
+        "# remotemanからエクスポートしたSSH設定",
+        f"# 生成日時: {datetime.datetime.utcnow().isoformat()}Z",
+        "# 秘密鍵/パスワードは含まれません(remotemanはこれらを平文で出力しない設計です)。",
+        "# IdentityFileは実際の環境に合わせてパスを設定してください。",
+        "",
+    ]
+    for server in servers:
+        lines.append(f"Host {server.name}")
+        lines.append(f"    HostName {server.host}")
+        lines.append(f"    Port {server.ssh_port}")
+        lines.append(f"    User {server.ssh_user}")
+        if server.proxy_jump:
+            lines.append(f"    ProxyJump {server.proxy_jump.name}")
+        if server.credential:
+            auth_label = "秘密鍵" if server.credential.auth_type == "key" else "パスワード"
+            lines.append(f"    # 認証情報(remoteman管理): {server.credential.name} [{auth_label}]")
+        else:
+            lines.append("    # 認証情報: 未設定")
+        if not server.enabled:
+            lines.append("    # 状態: remoteman上で無効化されています")
+        lines.append("")
+    return "\n".join(lines)
 
 
 # ============================================================
