@@ -529,6 +529,10 @@
     #console-header .status { display: block; margin: 0; font-size: 11px; }
     #console-header button { padding: 5px 10px; font-size: 12px; min-height: 0; }
   }
+  #bcast-banner { background: linear-gradient(90deg, rgba(220,40,60,.85), rgba(255,90,110,.85)); color: #fff; font-size: 13px; font-weight: 700; padding: 6px 12px; display: flex; align-items: center; gap: 12px; justify-content: center; }
+  #bcast-banner button { padding: 2px 10px; min-height: 0; background: rgba(255,255,255,.9); color: #b0182b; font-size: 12px; }
+  #console-box.broadcasting { border-color: #ff5a6e; box-shadow: 0 0 0 2px rgba(255,90,110,.7), 0 0 50px rgba(255,90,110,.45), 0 30px 80px rgba(0,0,0,.65); }
+  #console-box.broadcasting .console-term-panel.shown { border-color: rgba(255,90,110,.8) !important; }
 </style>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 </head>
@@ -827,6 +831,7 @@
         <button id="console-close-btn">✕ すべて閉じる</button>
       </div>
     </div>
+    <div id="bcast-banner" class="hidden">📡 一斉入力ON — 入力は全タブに送信されています <button id="bcast-off">OFFにする</button></div>
     <div id="console-panels"></div>
     <div id="snippet-panel" class="hidden"></div>
     <div id="ai-panel" class="hidden"></div>
@@ -1247,6 +1252,7 @@ function showConsoleOverlay() {
 }
 
 function minimizeConsoleOverlay() {
+  setBroadcast(false, true);
   consoleOverlay.classList.add("hidden");
   updateConsoleRestoreBtn();
 }
@@ -1259,6 +1265,16 @@ const KEYSEQ = { esc: "\x1b", tab: "\t", left: "\x1b[D", right: "\x1b[C", up: "\
                  home: "\x1b[H", end: "\x1b[F", pgup: "\x1b[5~", pgdn: "\x1b[6~" };
 const mods = { ctrl: false, alt: false };
 let broadcastOn = false;
+function setBroadcast(on, silent) {
+  if (broadcastOn === on) return;
+  broadcastOn = on;
+  const b = document.getElementById("tb-bcast");
+  if (b) b.classList.toggle("on", on);
+  document.getElementById("console-box").classList.toggle("broadcasting", on);
+  const banner = document.getElementById("bcast-banner");
+  if (banner) banner.classList.toggle("hidden", !on);
+  if (!silent) showToast(on ? "📡 一斉入力ON: 入力が全タブに送られます" : "一斉入力OFF");
+}
 const FONT_KEY = "remoteman_font";
 let fontSize = parseInt(localStorage.getItem(FONT_KEY) || "", 10) || (window.innerWidth <= 720 ? 13 : 14);
 
@@ -1417,6 +1433,7 @@ async function openConsole(server) {
   }
 
   const tabId = `t${Date.now()}_${server.id}`;
+  setBroadcast(false, true);
   showConsoleOverlay();
 
   const tabButtonEl = document.createElement("button");
@@ -1469,6 +1486,7 @@ if (![1, 2, 4].includes(splitMode)) splitMode = 1;
 function effectiveSplit() { return (window.innerWidth >= 1000 && matchMedia("(hover: hover)").matches) ? splitMode : 1; }
 
 function layoutPanels() {
+  if (broadcastOn && consoleTabs.size < 2) setBroadcast(false, true);
   const n = effectiveSplit();
   const ids = Array.from(consoleTabs.keys());
   let shown = [];
@@ -1507,6 +1525,7 @@ function activateConsoleTab(tabId) {
 }
 
 function killTab(tab) {
+  setBroadcast(false, true);
   tab.closing = true;
   clearTimeout(tab.retryTimer);
   try {
@@ -1653,6 +1672,7 @@ function togglePanel(panel, other, render) {
   if (show) render();
 }
 
+document.getElementById("bcast-off").addEventListener("click", () => setBroadcast(false));
 const toolbarEl = document.getElementById("console-toolbar");
 toolbarEl.addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.preventDefault(); }); // ソフトキーボードを閉じない
 toolbarEl.addEventListener("click", async (e) => {
@@ -1664,8 +1684,12 @@ toolbarEl.addEventListener("click", async (e) => {
   else if (b.id === "tb-paste") { try { const t = await navigator.clipboard.readText(); if (t) sendInput(t); } catch (err) { showToast("クリップボードを読めませんでした(許可が必要です)", "error"); } }
   else if (b.id === "tb-snip") togglePanel(snippetPanel, aiPanel, renderSnippets);
   else if (b.id === "tb-ai") togglePanel(aiPanel, snippetPanel, renderAiPanel);
-  else if (b.id === "tb-bcast") { broadcastOn = !broadcastOn; b.classList.toggle("on", broadcastOn); showToast(broadcastOn ? "📡 一斉入力ON: 入力を全タブへ送ります" : "一斉入力OFF"); }
-  else if (b.id === "tb-split") { splitMode = splitMode === 1 ? 2 : splitMode === 2 ? 4 : 1; try { localStorage.setItem(SPLIT_KEY, String(splitMode)); } catch (err) { /* ignore */ } layoutPanels(); }
+  else if (b.id === "tb-bcast") {
+    if (broadcastOn) setBroadcast(false);
+    else if (consoleTabs.size < 2) showToast("タブが2つ以上あるときに使えます");
+    else if (confirm("一斉入力をONにします。入力したキーが開いている全タブ(全サーバー)に送られます。よろしいですか？")) setBroadcast(true);
+  }
+  else if (b.id === "tb-split") { setBroadcast(false, true); splitMode = splitMode === 1 ? 2 : splitMode === 2 ? 4 : 1; try { localStorage.setItem(SPLIT_KEY, String(splitMode)); } catch (err) { /* ignore */ } layoutPanels(); }
   else if (b.id === "tb-fm") { fontSize = Math.max(9, fontSize - 1); applyFontSize(); }
   else if (b.id === "tb-fp") { fontSize = Math.min(26, fontSize + 1); applyFontSize(); }
   if (b.dataset.k || b.dataset.s || b.dataset.mod) { const t = consoleTabs.get(activeConsoleTabId); if (t && !b.dataset.mod) t.term.focus(); }
