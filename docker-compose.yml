@@ -13,6 +13,10 @@ services:
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-24}
       APP_PORT: ${APP_PORT:-8091}
       DATA_DIR: /data
+      SESSION_KEEPALIVE_SECONDS: ${SESSION_KEEPALIVE_SECONDS:-900}
+      CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+      AI_MODEL: ${AI_MODEL:-@cf/meta/llama-3.3-70b-instruct-fp8-fast}
     volumes:
       - ./data:/data
     restart: unless-stopped

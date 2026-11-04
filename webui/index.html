@@ -290,6 +290,245 @@
     #console-header { padding: 8px 10px; font-size: 12px; }
     #console-restore-btn { right: 12px; bottom: 12px; padding: 8px 14px; font-size: 13px; }
   }
+
+  /* =====================================================================
+     GLASS + MOTION (2026-11)  ガラス質感 / 動きのあるSSHツール
+     ===================================================================== */
+  html:root:root:root, html:root:root[data-theme="light"], html:root:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #050609;
+    --glass: rgba(255, 255, 255, 0.07);
+    --glass-strong: rgba(255, 255, 255, 0.12);
+    --card-bg: var(--glass);
+    --surface-alt: rgba(255, 255, 255, 0.08);
+    --border: rgba(255, 255, 255, 0.16);
+    --text: #eef2fb;
+    --text-muted: #a3a9b8;
+    --primary: #7dd3fc;
+    --primary-hover: #bae6fd;
+    --danger: #ff5c6c;
+    --danger-hover: #ff7a87;
+    --success: #34d399;
+    --warn: #fbbf24;
+    --radius: 12px;
+    --accent: 125, 211, 252;
+    --blur: blur(22px) saturate(160%);
+    --edge:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.35),
+      inset 1.5px 0 0 rgba(255, 255, 255, 0.16),
+      inset 0 20px 36px -18px rgba(255, 255, 255, 0.16),
+      inset 0 -26px 40px -22px rgba(0, 0, 0, 0.45);
+    --sheen: linear-gradient(160deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.07) 32%, rgba(255,255,255,0.03) 62%, rgba(255,255,255,0.09) 100%);
+  }
+  html { background: var(--bg); }
+  body { background: transparent; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  #theme-select { opacity: .5; pointer-events: none; }
+
+  /* 動く背景: 色付きオーブがゆっくり漂う + 極薄のグリッド */
+  body::before {
+    content: ""; position: fixed; inset: -12vmax; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(closest-side, rgba(56, 189, 248, 0.34), transparent) 12% 14% / 46vmax 46vmax no-repeat,
+      radial-gradient(closest-side, rgba(168, 85, 247, 0.30), transparent) 86% 20% / 40vmax 40vmax no-repeat,
+      radial-gradient(closest-side, rgba(52, 211, 153, 0.20), transparent) 74% 88% / 48vmax 48vmax no-repeat,
+      radial-gradient(closest-side, rgba(244, 114, 182, 0.18), transparent) 8% 90% / 36vmax 36vmax no-repeat;
+    filter: blur(34px);
+    animation: orb-drift 22s ease-in-out infinite alternate;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%);
+    mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%);
+    animation: grid-pan 40s linear infinite;
+  }
+  @keyframes orb-drift {
+    0%   { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+    50%  { transform: translate3d(4vmax, -3vmax, 0) scale(1.10) rotate(4deg); }
+    100% { transform: translate3d(-3vmax, 3vmax, 0) scale(1.04) rotate(-3deg); }
+  }
+  @keyframes grid-pan { to { background-position: 44px 44px, 44px 44px; } }
+
+  /* ガラス面 */
+  .login-box, header, nav.tabs, .card, table, #console-box, .toast {
+    background: var(--sheen), var(--glass);
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  }
+  header, nav.tabs { border-color: var(--border); }
+  header { box-shadow: 0 12px 36px rgba(0,0,0,.5), var(--edge); position: sticky; top: 0; z-index: 20; }
+  nav.tabs { overflow-x: auto; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  .card, .login-box { position: relative; isolation: isolate; box-shadow: 0 2px 2px rgba(0,0,0,.45), 0 12px 24px rgba(0,0,0,.35), 0 30px 60px rgba(0,0,0,.45), var(--edge); border-radius: 16px; transition: transform .25s, box-shadow .25s; }
+  .card::before, .login-box::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; padding: 1.5px;
+    background: linear-gradient(150deg, rgba(255,255,255,.7), rgba(255,255,255,.07) 38%, rgba(255,255,255,.02) 62%, rgba(255,255,255,.38));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); pointer-events: none;
+  }
+  .card::after, .login-box::after {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+    background:
+      radial-gradient(420px circle at var(--mx, 50%) var(--my, -10%), rgba(255,255,255,var(--ma, .09)), rgba(255,255,255,0) 60%),
+      radial-gradient(120% 55% at 50% -8%, rgba(255,255,255,.18), rgba(255,255,255,.04) 45%, rgba(255,255,255,0) 70%);
+  }
+  .login-box { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .15s ease-out; padding-top: 34px; width: 340px; }
+  .login-box img.mascot { animation: float 4.5s ease-in-out infinite; filter: drop-shadow(0 10px 18px rgba(56,189,248,.45)); }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  header .brand img { filter: drop-shadow(0 0 8px rgba(56,189,248,.55)); }
+  table { box-shadow: 0 2px 2px rgba(0,0,0,.4), 0 12px 24px rgba(0,0,0,.35), var(--edge); }
+  th { background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)); }
+  tbody tr { transition: background .2s; }
+  tbody tr:hover { background: rgba(var(--accent), .07); }
+
+  /* ボタン: 凸面ガラス */
+  button {
+    color: #04131c; font-weight: 600;
+    background: linear-gradient(180deg, rgba(186,230,253,.95), rgba(56,189,248,.80));
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.8), inset 0 -3px 5px rgba(0,0,0,.25), 0 1px 1px rgba(0,0,0,.5), 0 4px 10px rgba(0,0,0,.4), 0 8px 22px rgba(56,189,248,.18);
+    transition: transform .12s, filter .15s, box-shadow .15s; white-space: nowrap;
+  }
+  button:hover { background: linear-gradient(180deg, rgba(224,242,254,1), rgba(103,210,252,.9)); transform: translateY(-1px); }
+  button:active { transform: translateY(1px); box-shadow: inset 0 3px 7px rgba(0,0,0,.45); }
+  button.secondary { background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.07)); color: var(--text); border: 1px solid rgba(255,255,255,.2); }
+  button.secondary:hover { background: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.1)); }
+  button.danger { background: linear-gradient(180deg, rgba(255,120,134,.9), rgba(225,50,68,.8)); color: #fff; }
+  button.danger:hover { background: linear-gradient(180deg, rgba(255,150,160,1), rgba(240,70,88,.9)); }
+  button.small { padding: 4px 11px; border-radius: 8px; font-size: 12px; }
+  .tab-btn { background: transparent; color: var(--text-muted); box-shadow: none; border: none; font-weight: 500; white-space: nowrap; }
+  .tab-btn:hover { background: rgba(255,255,255,.07); color: var(--text); transform: none; }
+  .tab-btn.active { color: #fff; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05)); border-bottom: 2px solid rgb(var(--accent)); box-shadow: 0 8px 18px -8px rgba(var(--accent), .6); }
+
+  input, select, textarea {
+    background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(255,255,255,.05));
+    box-shadow: inset 0 3px 7px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.18); color: var(--text);
+  }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: inset 0 3px 7px rgba(0,0,0,.5), 0 0 0 3px rgba(var(--accent), .28), 0 0 22px rgba(var(--accent), .25); }
+  select option { background: #14171f; color: var(--text); }
+
+  /* オンライン/接続中のLEDは脈動 */
+  .badge { white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 3px rgba(0,0,0,.35); }
+  .badge.online::before, .badge.ok::before {
+    content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%;
+    background: #4ade80; box-shadow: 0 0 8px #4ade80; vertical-align: 1px; animation: led 1.8s ease-in-out infinite;
+  }
+  @keyframes led { 0%,100% { opacity: 1; box-shadow: 0 0 4px #4ade80; } 50% { opacity: .45; box-shadow: 0 0 12px #4ade80; } }
+
+  /* ---------- コンソール ---------- */
+  #console-overlay { background: rgba(3, 5, 10, .55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: fade-in .2s ease-out; }
+  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes pop-in { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+  #console-box {
+    background: linear-gradient(180deg, rgba(14,18,28,.72), rgba(8,10,16,.82));
+    border: 1px solid rgba(255,255,255,.18); border-radius: 16px; position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.4), var(--edge), 0 0 40px rgba(var(--accent), var(--glow, .10));
+    animation: pop-in .28s cubic-bezier(.2,.9,.3,1.2);
+    transition: box-shadow .4s;
+  }
+  /* 出力が流れている間、縁がうっすら光る */
+  #console-box.activity { --glow: .38; }
+  /* 接続時にスキャンラインが一度走る */
+  #console-box.scan::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 90px; pointer-events: none; z-index: 5;
+    background: linear-gradient(180deg, transparent, rgba(var(--accent), .22), transparent);
+    animation: scan 1.1s ease-out forwards;
+  }
+  @keyframes scan { from { transform: translateY(-100px); opacity: 1; } to { transform: translateY(100vh); opacity: 0; } }
+  #console-tabbar { background: rgba(0,0,0,.28); gap: 4px; padding: 8px 10px 0; scrollbar-width: none; }
+  #console-tabbar::-webkit-scrollbar { display: none; }
+  .console-tab-btn {
+    background: rgba(255,255,255,.06); color: #aab1c0; border: 1px solid rgba(255,255,255,.1); border-bottom: none;
+    box-shadow: none; font-weight: 500; border-radius: 10px 10px 0 0; transition: background .2s, color .2s, transform .2s;
+  }
+  .console-tab-btn:hover { background: rgba(255,255,255,.12); color: #fff; transform: translateY(-1px); }
+  .console-tab-btn.active { background: rgba(var(--accent), .14); color: #fff; box-shadow: inset 0 2px 0 rgb(var(--accent)), 0 -6px 18px -6px rgba(var(--accent), .5); }
+  .console-tab-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: #6b7280; flex: none; }
+  .console-tab-btn.live .dot { background: #4ade80; box-shadow: 0 0 8px #4ade80; animation: led 1.8s ease-in-out infinite; }
+  .console-tab-btn.connecting .dot { background: #fbbf24; animation: led .6s ease-in-out infinite; }
+  .console-tab-btn.lost .dot { background: #ff5c6c; }
+  #console-header { background: transparent; border-bottom: 1px solid rgba(255,255,255,.08); }
+  #console-header .status { color: #9ca3af; margin-left: 8px; }
+  .console-term-panel .xterm-viewport { background: transparent !important; }
+  .console-term-panel .xterm-cursor-layer { filter: drop-shadow(0 0 5px rgba(var(--accent), .9)); }
+  #console-restore-btn { animation: float 3.6s ease-in-out infinite; }
+
+  /* ツールバー(特殊キー / スニペット / 一斉入力) */
+  #console-toolbar {
+    display: flex; gap: 6px; align-items: center; padding: 6px 8px; overflow-x: auto; scrollbar-width: none;
+    background: rgba(0,0,0,.30); border-top: 1px solid rgba(255,255,255,.08); -webkit-overflow-scrolling: touch;
+  }
+  #console-toolbar::-webkit-scrollbar { display: none; }
+  #console-toolbar button {
+    flex: none; min-width: 40px; padding: 8px 10px; font-size: 13px; border-radius: 9px; font-weight: 600;
+    background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.07)); color: #eaf2ff;
+    border: 1px solid rgba(255,255,255,.2); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 2px 5px rgba(0,0,0,.4);
+    font-family: ui-monospace, Menlo, Consolas, monospace; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  }
+  #console-toolbar button.on { background: linear-gradient(180deg, rgba(186,230,253,.95), rgba(56,189,248,.8)); color: #04131c; box-shadow: 0 0 16px rgba(var(--accent), .6), inset 0 1px 0 rgba(255,255,255,.8); }
+  #console-toolbar button.bcast.on { background: linear-gradient(180deg, rgba(255,140,150,.95), rgba(240,60,80,.85)); color: #fff; box-shadow: 0 0 16px rgba(255,90,110,.7); animation: led 1.2s infinite; }
+  #console-toolbar .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,.14); flex: none; margin: 2px 2px; }
+  #console-toolbar .keys-only { display: none; }
+  @media (max-width: 720px), (hover: none) { #console-toolbar .keys-only { display: inline-block; } }
+
+  /* スニペットパレット */
+  #snippet-panel, #ai-panel {
+    position: absolute; left: 10px; right: 10px; bottom: 58px; max-height: 60%; z-index: 10; overflow-y: auto;
+    padding: 12px; border-radius: 14px; background: linear-gradient(180deg, rgba(30,36,52,.92), rgba(16,20,30,.94));
+    border: 1px solid rgba(255,255,255,.2); box-shadow: 0 20px 50px rgba(0,0,0,.6), var(--edge); animation: pop-in .18s ease-out;
+  }
+  #snippet-panel .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: stretch; }
+  #snippet-panel .snip { flex: 1; text-align: left; font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: rgba(255,255,255,.08); color: #e9eefb; border: 1px solid rgba(255,255,255,.14); box-shadow: none; overflow: hidden; text-overflow: ellipsis; }
+  #snippet-panel .snip small { display: block; color: #8d96ab; font-weight: 400; font-size: 11px; }
+  #snippet-panel .del { background: rgba(255,92,108,.25); color: #ffb3bb; padding: 0 12px; box-shadow: none; }
+  #snippet-panel .add { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  #snippet-panel .add input { flex: 1 1 120px; font-size: 13px; padding: 8px; }
+  #snippet-panel h4 { margin: 0 0 8px; font-size: 13px; color: #aab1c0; display: flex; justify-content: space-between; align-items: center; }
+  #snippet-panel label.inline { display: inline-flex; gap: 6px; align-items: center; margin: 0; color: #cbd2e0; }
+  #snippet-panel label.inline input { width: auto; }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::before, body::after, .login-box img.mascot, #console-restore-btn, #console-box, .badge::before { animation: none !important; }
+  }
+  @media (max-width: 720px) {
+    body::before { filter: blur(22px); animation-duration: 40s; }
+    body::after { display: none; }
+    .card::after, .login-box::after { display: none; }
+    .card { border-radius: 14px; }
+    button { min-height: 38px; }
+    button.small { min-height: 32px; padding: 4px 12px; }
+    input, select, textarea { font-size: 16px; padding: 10px; } /* iOSの自動ズーム防止 */
+    #console-box { border-radius: 0; border: none; }
+    #console-toolbar button { min-width: 44px; padding: 10px 11px; }
+    #snippet-panel { bottom: 62px; }
+    header { padding: 8px 12px; }
+  }
+
+  /* ---------- 分割表示(PC) ---------- */
+  #console-panels.split2, #console-panels.split4 { display: grid; gap: 8px; padding: 8px; }
+  #console-panels.split2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+  #console-panels.split4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  #console-panels.split2 .console-term-panel, #console-panels.split4 .console-term-panel {
+    position: relative; inset: auto; min-height: 0; border-radius: 12px; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.22); transition: border-color .2s, box-shadow .2s;
+  }
+  #console-panels.split2 .console-term-panel.active, #console-panels.split4 .console-term-panel.active {
+    border-color: rgba(var(--accent), .75); box-shadow: 0 0 22px rgba(var(--accent), .25), inset 0 0 0 1px rgba(var(--accent), .25);
+  }
+  .console-term-panel { display: none; }
+  .console-term-panel.shown { display: block; }
+  .console-term-panel .pane-label { position: absolute; top: 6px; right: 10px; z-index: 3; font-size: 11px; color: #9fb3c8; opacity: .8; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #tb-split { display: none; }
+  @media (min-width: 1000px) and (hover: hover) { #tb-split { display: inline-block; } }
+  @media (max-width: 999px), (hover: none) { #console-panels.split2, #console-panels.split4 { display: block; padding: 0; } }
+  @media (max-width: 720px) {
+    #console-header { flex-wrap: wrap; gap: 4px; padding: 6px 10px; }
+    #console-title { font-size: 12px; }
+    #console-header .status { display: block; margin: 0; font-size: 11px; }
+    #console-header button { padding: 5px 10px; font-size: 12px; min-height: 0; }
+  }
 </style>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 </head>
@@ -589,6 +828,36 @@
       </div>
     </div>
     <div id="console-panels"></div>
+    <div id="snippet-panel" class="hidden"></div>
+    <div id="ai-panel" class="hidden"></div>
+    <div id="console-toolbar">
+      <button data-k="esc" class="keys-only">Esc</button>
+      <button data-k="tab" class="keys-only">Tab</button>
+      <button id="tb-ctrl" data-mod="ctrl" class="keys-only">Ctrl</button>
+      <button id="tb-alt" data-mod="alt" class="keys-only">Alt</button>
+      <button data-k="left" class="keys-only">←</button>
+      <button data-k="down" class="keys-only">↓</button>
+      <button data-k="up" class="keys-only">↑</button>
+      <button data-k="right" class="keys-only">→</button>
+      <button data-k="home" class="keys-only">Home</button>
+      <button data-k="end" class="keys-only">End</button>
+      <button data-k="pgup" class="keys-only">PgUp</button>
+      <button data-k="pgdn" class="keys-only">PgDn</button>
+      <button data-s="|" class="keys-only">|</button>
+      <button data-s="~" class="keys-only">~</button>
+      <button data-s="/" class="keys-only">/</button>
+      <button data-s="-" class="keys-only">-</button>
+      <button data-s="\u0003" class="keys-only">^C</button>
+      <button data-s="\u0004" class="keys-only">^D</button>
+      <span class="sep keys-only"></span>
+      <button id="tb-paste" title="クリップボードから貼り付け">貼付</button>
+      <button id="tb-snip" title="コマンド集">📋 集</button>
+      <button id="tb-ai" title="AIにコマンドを作ってもらう / 出力を解説してもらう">✨ AI</button>
+      <button id="tb-split" title="画面分割: 1 → 2 → 4">⊞ 1</button>
+      <button id="tb-bcast" class="bcast" title="入力を開いている全タブに同時送信">📡 一斉</button>
+      <button id="tb-fm" title="文字を小さく">A−</button>
+      <button id="tb-fp" title="文字を大きく">A＋</button>
+    </div>
   </div>
 </div>
 
@@ -985,6 +1254,160 @@ function minimizeConsoleOverlay() {
 document.getElementById("console-minimize-btn").addEventListener("click", minimizeConsoleOverlay);
 consoleRestoreBtn.addEventListener("click", showConsoleOverlay);
 
+// ---- 入力処理(特殊キー / Ctrl・Alt固定 / 一斉入力) ----
+const KEYSEQ = { esc: "\x1b", tab: "\t", left: "\x1b[D", right: "\x1b[C", up: "\x1b[A", down: "\x1b[B",
+                 home: "\x1b[H", end: "\x1b[F", pgup: "\x1b[5~", pgdn: "\x1b[6~" };
+const mods = { ctrl: false, alt: false };
+let broadcastOn = false;
+const FONT_KEY = "remoteman_font";
+let fontSize = parseInt(localStorage.getItem(FONT_KEY) || "", 10) || (window.innerWidth <= 720 ? 13 : 14);
+
+function refreshModButtons() {
+  document.getElementById("tb-ctrl").classList.toggle("on", mods.ctrl);
+  document.getElementById("tb-alt").classList.toggle("on", mods.alt);
+}
+function applyMods(data) {
+  if (mods.ctrl && data.length === 1) {
+    const c = data.toLowerCase().charCodeAt(0);
+    if (c >= 97 && c <= 122) data = String.fromCharCode(c - 96);
+    else if (data === "[") data = "\x1b";
+    else if (data === " ") data = "\x00";
+  }
+  if (mods.alt) data = "\x1b" + data;
+  if (mods.ctrl || mods.alt) { mods.ctrl = mods.alt = false; refreshModButtons(); }
+  return data;
+}
+function sendInput(data) {
+  data = applyMods(data);
+  const targets = broadcastOn ? Array.from(consoleTabs.values()) : [consoleTabs.get(activeConsoleTabId)];
+  for (const t of targets) {
+    if (t && t.ws && t.ws.readyState === WebSocket.OPEN) t.ws.send(data);
+  }
+}
+
+// ---- タブ接続(切断時は同じシェルへ自動再接続) ----
+const consoleBoxEl = document.getElementById("console-box");
+let activityTimer = null;
+function flashActivity() {
+  consoleBoxEl.classList.add("activity");
+  clearTimeout(activityTimer);
+  activityTimer = setTimeout(() => consoleBoxEl.classList.remove("activity"), 350);
+}
+function setTabState(tab, state) {
+  tab.tabButtonEl.classList.remove("live", "connecting", "lost");
+  if (state) tab.tabButtonEl.classList.add(state);
+}
+function setTabStatus(tab, text) {
+  tab.status = text;
+  if (consoleTabs.get(activeConsoleTabId) === tab) consoleStatusEl.textContent = text;
+}
+
+async function connectTab(tab) {
+  if (tab.closing || tab.ended) return;
+  const isRetry = tab.retries > 0;
+  setTabState(tab, "connecting");
+  setTabStatus(tab, isRetry ? `再接続中…(${tab.retries})` : "接続準備中...");
+
+  let ticket;
+  try {
+    ticket = (await api(`/api/servers/${tab.server.id}/console-ticket`, { method: "POST" })).ticket;
+  } catch (err) {
+    setTabState(tab, "lost");
+    setTabStatus(tab, `エラー: ${err.message}`);
+    scheduleReconnect(tab);
+    return;
+  }
+  if (tab.closing) return;
+
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  let url = `${wsProtocol}//${location.host}/ws/console/${tab.server.id}?ticket=${encodeURIComponent(ticket)}`;
+  if (tab.sessionId) url += `&session=${encodeURIComponent(tab.sessionId)}`;
+  const ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
+  tab.ws = ws;
+
+  tab.sendResize = () => {
+    tab.fitAddon.fit();
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ remoteman_console_control: "resize", cols: tab.term.cols, rows: tab.term.rows }));
+    }
+  };
+
+  ws.onopen = () => {
+    tab.retries = 0;
+    setTabState(tab, "live");
+    setTabStatus(tab, "接続済み");
+    tab.sendResize();
+    if (!tab.sessionId) {
+      consoleBoxEl.classList.add("scan");
+      setTimeout(() => consoleBoxEl.classList.remove("scan"), 1200);
+    }
+  };
+  ws.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer) {
+      tab.term.write(new Uint8Array(event.data));
+      flashActivity();
+      return;
+    }
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === "session") {
+        if (tab.sessionId && !payload.resumed) {
+          tab.term.write("\r\n\x1b[33m[remoteman] 前のセッションは終了していたため、新しく開始しました\x1b[0m\r\n");
+        } else if (payload.resumed) {
+          setTabStatus(tab, "接続済み(セッション再開)");
+        }
+        tab.sessionId = payload.id;
+      } else if (payload.type === "ended") {
+        tab.ended = true;
+        setTabState(tab, "lost");
+        setTabStatus(tab, "シェルが終了しました");
+        tab.term.write("\r\n\x1b[33m[remoteman] シェルが終了しました\x1b[0m\r\n");
+      } else if (payload.type === "error") {
+        tab.fatal = true;
+        setTabStatus(tab, `エラー: ${payload.message}`);
+        tab.term.write(`\r\n\x1b[31m[remoteman] ${payload.message}\x1b[0m\r\n`);
+      }
+    } catch (e) { /* ignore */ }
+  };
+  ws.onclose = () => {
+    if (tab.ws !== ws || tab.closing || tab.ended) return;
+    setTabState(tab, "lost");
+    if (!tab.fatal) setTabStatus(tab, "切断(自動で再接続します)");
+    if (!tab.noticed) { tab.term.write("\r\n\x1b[33m[remoteman] 切断されました。再接続を試みます…\x1b[0m\r\n"); tab.noticed = true; }
+    scheduleReconnect(tab);
+  };
+  ws.onerror = () => { /* onclose が続く */ };
+}
+
+function scheduleReconnect(tab) {
+  if (tab.closing || tab.ended || tab.fatal || tab.retryTimer) return;
+  if (tab.retries >= 20) { setTabStatus(tab, "再接続に失敗しました(タブを開き直してください)"); return; }
+  const delay = Math.min(1000 * Math.pow(1.6, tab.retries), 15000);
+  tab.retries += 1;
+  tab.retryTimer = setTimeout(() => { tab.retryTimer = null; connectTab(tab); }, delay);
+}
+
+function reconnectAllNow() {
+  for (const tab of consoleTabs.values()) {
+    if (tab.closing || tab.ended || tab.fatal) continue;
+    if (!tab.ws || tab.ws.readyState === WebSocket.CLOSED) {
+      clearTimeout(tab.retryTimer); tab.retryTimer = null; tab.retries = 0; connectTab(tab);
+    }
+  }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) reconnectAllNow(); });
+window.addEventListener("online", reconnectAllNow);
+
+function applyFontSize() {
+  localStorage.setItem(FONT_KEY, String(fontSize));
+  for (const t of consoleTabs.values()) {
+    t.term.options.fontSize = fontSize;
+    try { t.fitAddon.fit(); } catch (e) { /* ignore */ }
+  }
+  for (const t of consoleTabs.values()) if (t.panelEl.classList.contains("shown") && t.sendResize) t.sendResize();
+}
+
 async function openConsole(server) {
   const existingTabId = findOpenTabIdForServer(server.id);
   if (existingTabId) {
@@ -998,13 +1421,10 @@ async function openConsole(server) {
 
   const tabButtonEl = document.createElement("button");
   tabButtonEl.className = "console-tab-btn";
-  tabButtonEl.innerHTML = `<span class="tab-label">${escapeHtml(server.name)}</span><span class="tab-close" title="閉じる">✕</span>`;
+  tabButtonEl.innerHTML = `<span class="dot"></span><span class="tab-label">${escapeHtml(server.name)}</span><span class="tab-close" title="閉じる">✕</span>`;
   tabButtonEl.addEventListener("click", (e) => {
-    if (e.target.closest(".tab-close")) {
-      closeConsoleTab(tabId);
-    } else {
-      activateConsoleTab(tabId);
-    }
+    if (e.target.closest(".tab-close")) closeConsoleTab(tabId);
+    else activateConsoleTab(tabId);
   });
   consoleTabbarEl.appendChild(tabButtonEl);
 
@@ -1013,111 +1433,93 @@ async function openConsole(server) {
   consolePanelsEl.appendChild(panelEl);
 
   const term = new Terminal({
-    fontSize: 14,
+    fontSize,
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK JP", monospace',
     cursorBlink: true,
-    theme: { background: "#1e1e1e" },
+    scrollback: 5000,
+    allowTransparency: true,
+    macOptionIsMeta: true,
+    theme: { background: "rgba(0,0,0,0)", cursor: "#7dd3fc", selectionBackground: "rgba(125,211,252,.30)" },
   });
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
   term.open(panelEl);
 
-  const tab = { server, ws: null, term, fitAddon, tabButtonEl, panelEl, status: "接続準備中..." };
+  const tab = { server, ws: null, term, fitAddon, tabButtonEl, panelEl, status: "接続準備中...",
+                sessionId: null, retries: 0, retryTimer: null, closing: false, ended: false, fatal: false, noticed: false };
   consoleTabs.set(tabId, tab);
+  panelEl.addEventListener("pointerdown", () => { if (activeConsoleTabId !== tabId) activateConsoleTab(tabId); });
+  term.onData((data) => { if (consoleTabs.get(activeConsoleTabId) === tab) sendInput(data); });
   activateConsoleTab(tabId);
-
-  let ticket;
-  try {
-    const res = await api(`/api/servers/${server.id}/console-ticket`, { method: "POST" });
-    ticket = res.ticket;
-  } catch (err) {
-    tab.status = `エラー: ${err.message}`;
-    if (activeConsoleTabId === tabId) consoleStatusEl.textContent = tab.status;
-    return;
-  }
-
-  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/console/${server.id}?ticket=${encodeURIComponent(ticket)}`);
-  ws.binaryType = "arraybuffer";
-  tab.ws = ws;
-
-  const setStatus = (text) => {
-    tab.status = text;
-    if (activeConsoleTabId === tabId) consoleStatusEl.textContent = text;
-  };
-
-  const sendResize = () => {
-    fitAddon.fit();
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ remoteman_console_control: "resize", cols: term.cols, rows: term.rows }));
-    }
-  };
-  tab.sendResize = sendResize;
-
-  ws.onopen = () => {
-    setStatus("接続済み");
-    if (activeConsoleTabId === tabId) sendResize();
-  };
-  ws.onmessage = (event) => {
-    if (event.data instanceof ArrayBuffer) {
-      term.write(new Uint8Array(event.data));
-    } else {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === "error") {
-          setStatus(`エラー: ${payload.message}`);
-          term.write(`\r\n\x1b[31m[remoteman] ${payload.message}\x1b[0m\r\n`);
-        }
-      } catch (e) { /* ignore */ }
-    }
-  };
-  ws.onclose = () => {
-    setStatus("切断されました");
-    term.write("\r\n\x1b[33m[remoteman] 接続が終了しました\x1b[0m\r\n");
-  };
-  ws.onerror = () => {
-    setStatus("接続エラー");
-  };
-
-  term.onData((data) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
-  });
 
   if (!consoleResizeHandlerAttached) {
     const triggerActiveResize = () => {
-      if (activeConsoleTabId) {
-        const activeTab = consoleTabs.get(activeConsoleTabId);
-        if (activeTab && activeTab.sendResize) activeTab.sendResize();
-      }
+      for (const t of consoleTabs.values()) if (t.panelEl.classList.contains("shown") && t.sendResize) t.sendResize();
     };
     window.addEventListener("resize", triggerActiveResize);
-    // モーダル右下のハンドルでのドラッグリサイズ(CSS resize:both)にも追従させる
-    if (window.ResizeObserver) {
-      new ResizeObserver(triggerActiveResize).observe(document.getElementById("console-box"));
-    }
+    if (window.ResizeObserver) new ResizeObserver(triggerActiveResize).observe(consoleBoxEl);
     consoleResizeHandlerAttached = true;
   }
+  connectTab(tab);
+}
+
+const SPLIT_KEY = "remoteman_split";
+let splitMode = parseInt(localStorage.getItem(SPLIT_KEY) || "1", 10);
+if (![1, 2, 4].includes(splitMode)) splitMode = 1;
+function effectiveSplit() { return (window.innerWidth >= 1000 && matchMedia("(hover: hover)").matches) ? splitMode : 1; }
+
+function layoutPanels() {
+  const n = effectiveSplit();
+  const ids = Array.from(consoleTabs.keys());
+  let shown = [];
+  if (n === 1) shown = activeConsoleTabId ? [activeConsoleTabId] : [];
+  else {
+    shown = ids.slice(0, n);
+    if (activeConsoleTabId && !shown.includes(activeConsoleTabId)) shown[shown.length - 1] = activeConsoleTabId;
+  }
+  consolePanelsEl.classList.toggle("split2", n === 2);
+  consolePanelsEl.classList.toggle("split4", n === 4);
+  // グリッドの並び順をタブ順に揃える
+  shown.sort((a, b) => ids.indexOf(a) - ids.indexOf(b));
+  shown.forEach((id) => consolePanelsEl.appendChild(consoleTabs.get(id).panelEl));
+  for (const [id, t] of consoleTabs) {
+    t.panelEl.classList.toggle("shown", shown.includes(id));
+    t.panelEl.classList.toggle("active", id === activeConsoleTabId);
+    t.tabButtonEl.classList.toggle("visible", shown.includes(id));
+  }
+  const sb = document.getElementById("tb-split");
+  if (sb) sb.textContent = `⊞ ${splitMode}`;
+  requestAnimationFrame(() => {
+    for (const id of shown) { const t = consoleTabs.get(id); if (t && t.sendResize) t.sendResize(); }
+  });
 }
 
 function activateConsoleTab(tabId) {
   const tab = consoleTabs.get(tabId);
   if (!tab) return;
   activeConsoleTabId = tabId;
-  for (const [id, t] of consoleTabs) {
-    const isActive = id === tabId;
-    t.tabButtonEl.classList.toggle("active", isActive);
-    t.panelEl.classList.toggle("active", isActive);
-  }
+  for (const [id, t] of consoleTabs) t.tabButtonEl.classList.toggle("active", id === tabId);
+  layoutPanels();
   consoleTitleEl.textContent = `🖥 ${tab.server.name} (${tab.server.host})`;
   consoleStatusEl.textContent = tab.status;
   if (tab.sendResize) tab.sendResize();
   tab.term.focus();
 }
 
+function killTab(tab) {
+  tab.closing = true;
+  clearTimeout(tab.retryTimer);
+  try {
+    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) tab.ws.send(JSON.stringify({ remoteman_console_control: "close" }));
+    if (tab.ws) tab.ws.close();
+  } catch (e) { /* ignore */ }
+  try { tab.term.dispose(); } catch (e) { /* ignore */ }
+}
+
 function closeConsoleTab(tabId) {
   const tab = consoleTabs.get(tabId);
   if (!tab) return;
-  try { if (tab.ws) tab.ws.close(); } catch (e) { /* ignore */ }
-  try { tab.term.dispose(); } catch (e) { /* ignore */ }
+  killTab(tab);
   tab.tabButtonEl.remove();
   tab.panelEl.remove();
   consoleTabs.delete(tabId);
@@ -1130,15 +1532,15 @@ function closeConsoleTab(tabId) {
     } else {
       consoleOverlay.classList.add("hidden");
     }
+  } else {
+    layoutPanels();
   }
   updateConsoleRestoreBtn();
 }
 
 function closeAllConsoleTabs() {
   for (const tabId of Array.from(consoleTabs.keys())) {
-    const tab = consoleTabs.get(tabId);
-    try { if (tab.ws) tab.ws.close(); } catch (e) { /* ignore */ }
-    try { tab.term.dispose(); } catch (e) { /* ignore */ }
+    killTab(consoleTabs.get(tabId));
   }
   consoleTabbarEl.innerHTML = "";
   consolePanelsEl.innerHTML = "";
@@ -1149,6 +1551,160 @@ function closeAllConsoleTabs() {
 }
 
 document.getElementById("console-close-btn").addEventListener("click", closeAllConsoleTabs);
+
+// ============================================================
+// ツールバー / コマンド集 / AIアシスト / スマホ対応
+// ============================================================
+const snippetPanel = document.getElementById("snippet-panel");
+const aiPanel = document.getElementById("ai-panel");
+const SNIP_KEY = "remoteman_snippets";
+const DEFAULT_SNIPS = [
+  { label: "ディスク", cmd: "df -h" }, { label: "メモリ", cmd: "free -h" },
+  { label: "Docker一覧", cmd: "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'" },
+  { label: "負荷の高い順", cmd: "ps aux --sort=-%cpu | head -15" },
+  { label: "ポート待受", cmd: "ss -tlnp" }, { label: "tmuxに戻る", cmd: "tmux a || tmux" },
+];
+let snippetEnter = true;
+function loadSnips() { try { return JSON.parse(localStorage.getItem(SNIP_KEY)) || DEFAULT_SNIPS; } catch (e) { return DEFAULT_SNIPS; } }
+function saveSnips(list) { try { localStorage.setItem(SNIP_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ } }
+
+function renderSnippets() {
+  const list = loadSnips();
+  snippetPanel.innerHTML = `<h4><span>📋 コマンド集(タップで送信)</span><label class="inline"><input type="checkbox" id="snip-enter" ${snippetEnter ? "checked" : ""}>Enterも送る</label></h4>` +
+    list.map((s, i) => `<div class="row"><button class="snip" data-i="${i}">${escapeHtml(s.label || s.cmd)}<small>${escapeHtml(s.cmd)}</small></button><button class="del" data-del="${i}">✕</button></div>`).join("") +
+    `<div class="add"><input id="snip-label" placeholder="名前(任意)"><input id="snip-cmd" placeholder="コマンド"><button id="snip-add">追加</button></div>`;
+}
+snippetPanel.addEventListener("click", (e) => {
+  const list = loadSnips();
+  const snip = e.target.closest(".snip");
+  const del = e.target.closest("[data-del]");
+  if (snip) {
+    sendInput(list[+snip.dataset.i].cmd + (snippetEnter ? "\r" : ""));
+    snippetPanel.classList.add("hidden");
+    const t = consoleTabs.get(activeConsoleTabId); if (t) t.term.focus();
+  } else if (del) {
+    list.splice(+del.dataset.del, 1); saveSnips(list); renderSnippets();
+  } else if (e.target.id === "snip-add") {
+    const cmd = document.getElementById("snip-cmd").value.trim();
+    if (!cmd) return;
+    list.push({ label: document.getElementById("snip-label").value.trim(), cmd }); saveSnips(list); renderSnippets();
+  } else if (e.target.id === "snip-enter") {
+    snippetEnter = e.target.checked;
+  }
+});
+
+function tailText(tab, maxLines = 60) {
+  const buf = tab.term.buffer.active;
+  const end = buf.length;
+  const lines = [];
+  for (let i = Math.max(0, end - maxLines); i < end; i++) {
+    const l = buf.getLine(i);
+    if (l) lines.push(l.translateToString(true));
+  }
+  return lines.join("\n").replace(/\n+$/, "");
+}
+
+let aiEnabled = null;
+async function ensureAiStatus() {
+  if (aiEnabled !== null) return aiEnabled;
+  try { aiEnabled = (await api("/api/ai/status")).enabled; } catch (e) { aiEnabled = false; }
+  return aiEnabled;
+}
+async function renderAiPanel() {
+  const enabled = await ensureAiStatus();
+  if (!enabled) {
+    aiPanel.innerHTML = `<h4><span>✨ AIアシスト</span></h4><p class="muted" style="font-size:13px;margin:0">サーバー側で CF_ACCOUNT_ID / CF_API_TOKEN が未設定のため無効です。</p>`;
+    return;
+  }
+  aiPanel.innerHTML = `<h4><span>✨ AIアシスト</span><span class="muted" style="font-size:11px;font-weight:400">提案のみ・自動実行しません</span></h4>
+    <div class="add" style="margin-top:0"><input id="ai-q" placeholder="やりたいことを日本語で(例: 80番を使ってるプロセスを探して)"><button id="ai-go">コマンド生成</button></div>
+    <div class="add"><button class="secondary" id="ai-explain">直近の出力を解説(※画面の末尾約60行をAIに送信)</button></div>
+    <div id="ai-result" style="margin-top:10px;font-size:13px;white-space:pre-wrap"></div>`;
+}
+async function aiCall(mode, text) {
+  const tab = consoleTabs.get(activeConsoleTabId);
+  const out = document.getElementById("ai-result");
+  out.innerHTML = `<span class="muted">考え中…</span>`;
+  try {
+    const res = await api("/api/ai/assist", { method: "POST", body: JSON.stringify({ mode, text, server_name: tab ? tab.server.name : "" }) });
+    if (mode === "explain") { out.textContent = res.explain; return; }
+    out.innerHTML = `<div style="font-family:ui-monospace,Menlo,monospace;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.4);word-break:break-all">${escapeHtml(res.command)}</div>
+      <div class="muted" style="margin:6px 0">${escapeHtml(res.explain || "")}</div>
+      ${res.danger ? `<div style="color:#ff8a96;margin-bottom:6px">⚠ 破壊的な可能性があります。内容を確認してから実行してください。</div>` : ""}
+      <button id="ai-insert">入力欄に挿入(Enterは押さない)</button>
+      ${res.danger ? "" : `<button class="secondary" id="ai-run" style="margin-left:6px">そのまま実行</button>`}`;
+    document.getElementById("ai-insert").onclick = () => { sendInput(res.command); aiPanel.classList.add("hidden"); tab && tab.term.focus(); };
+    const run = document.getElementById("ai-run");
+    if (run) run.onclick = () => { sendInput(res.command + "\r"); aiPanel.classList.add("hidden"); tab && tab.term.focus(); };
+  } catch (err) { out.innerHTML = `<span style="color:#ff8a96">${escapeHtml(err.message)}</span>`; }
+}
+aiPanel.addEventListener("click", (e) => {
+  if (e.target.id === "ai-go") { const q = document.getElementById("ai-q").value.trim(); if (q) aiCall("command", q); }
+  else if (e.target.id === "ai-explain") { const t = consoleTabs.get(activeConsoleTabId); if (t) aiCall("explain", tailText(t)); }
+});
+aiPanel.addEventListener("keydown", (e) => {
+  if (e.target.id === "ai-q" && e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); document.getElementById("ai-go").click(); }
+});
+
+function togglePanel(panel, other, render) {
+  other.classList.add("hidden");
+  const show = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !show);
+  if (show) render();
+}
+
+const toolbarEl = document.getElementById("console-toolbar");
+toolbarEl.addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.preventDefault(); }); // ソフトキーボードを閉じない
+toolbarEl.addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.k) sendInput(KEYSEQ[b.dataset.k]);
+  else if (b.dataset.s) { const keep = { ...mods }; mods.ctrl = mods.alt = false; consoleTabs.size && sendRaw(JSON.parse(`"${b.dataset.s}"`)); Object.assign(mods, keep); }
+  else if (b.dataset.mod) { mods[b.dataset.mod] = !mods[b.dataset.mod]; refreshModButtons(); }
+  else if (b.id === "tb-paste") { try { const t = await navigator.clipboard.readText(); if (t) sendInput(t); } catch (err) { showToast("クリップボードを読めませんでした(許可が必要です)", "error"); } }
+  else if (b.id === "tb-snip") togglePanel(snippetPanel, aiPanel, renderSnippets);
+  else if (b.id === "tb-ai") togglePanel(aiPanel, snippetPanel, renderAiPanel);
+  else if (b.id === "tb-bcast") { broadcastOn = !broadcastOn; b.classList.toggle("on", broadcastOn); showToast(broadcastOn ? "📡 一斉入力ON: 入力を全タブへ送ります" : "一斉入力OFF"); }
+  else if (b.id === "tb-split") { splitMode = splitMode === 1 ? 2 : splitMode === 2 ? 4 : 1; try { localStorage.setItem(SPLIT_KEY, String(splitMode)); } catch (err) { /* ignore */ } layoutPanels(); }
+  else if (b.id === "tb-fm") { fontSize = Math.max(9, fontSize - 1); applyFontSize(); }
+  else if (b.id === "tb-fp") { fontSize = Math.min(26, fontSize + 1); applyFontSize(); }
+  if (b.dataset.k || b.dataset.s || b.dataset.mod) { const t = consoleTabs.get(activeConsoleTabId); if (t && !b.dataset.mod) t.term.focus(); }
+});
+function sendRaw(data) {
+  const targets = broadcastOn ? Array.from(consoleTabs.values()) : [consoleTabs.get(activeConsoleTabId)];
+  for (const t of targets) if (t && t.ws && t.ws.readyState === WebSocket.OPEN) t.ws.send(data);
+}
+
+// ピンチで文字サイズ変更
+(() => {
+  let startDist = 0, startSize = 0;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  consolePanelsEl.addEventListener("touchstart", (e) => { if (e.touches.length === 2) { startDist = dist(e.touches); startSize = fontSize; } }, { passive: true });
+  consolePanelsEl.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 2 || !startDist) return;
+    const next = Math.max(9, Math.min(26, Math.round(startSize * dist(e.touches) / startDist)));
+    if (next !== fontSize) { fontSize = next; applyFontSize(); }
+  }, { passive: true });
+  consolePanelsEl.addEventListener("touchend", () => { startDist = 0; }, { passive: true });
+})();
+
+// スマホのソフトキーボードで端末が隠れないよう、見えている領域に高さを合わせる
+if (window.visualViewport) {
+  const fitToViewport = () => {
+    if (window.innerWidth <= 720) {
+      consoleBoxEl.style.height = window.visualViewport.height + "px";
+      consoleBoxEl.style.transform = `translateY(${window.visualViewport.offsetTop}px)`;
+    } else {
+      consoleBoxEl.style.height = "";
+      consoleBoxEl.style.transform = "";
+    }
+  };
+  window.visualViewport.addEventListener("resize", fitToViewport);
+  window.visualViewport.addEventListener("scroll", fitToViewport);
+  fitToViewport();
+}
+
+
 
 // ============================================================
 // 認証情報管理
@@ -1596,6 +2152,27 @@ function formatDateTime(iso) {
       logout();
     }
   }
+})();
+
+// ガラスの光沢をポインタに追従させる(ログイン枠は少し傾く)
+(() => {
+  if (matchMedia("(hover: none)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.addEventListener("pointermove", (e) => {
+    const el = e.target.closest && e.target.closest(".card, .login-box");
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    el.style.setProperty("--my", (e.clientY - r.top) + "px");
+    el.style.setProperty("--ma", "0.16");
+    if (el.classList.contains("login-box")) {
+      el.style.setProperty("--ry", (((e.clientX - r.left) / r.width - 0.5) * 8).toFixed(2) + "deg");
+      el.style.setProperty("--rx", ((0.5 - (e.clientY - r.top) / r.height) * 8).toFixed(2) + "deg");
+    }
+  }, { passive: true });
+  document.addEventListener("pointerout", (e) => {
+    const el = e.target.closest && e.target.closest(".card, .login-box");
+    if (el && !el.contains(e.relatedTarget)) ["--mx", "--my", "--ma", "--rx", "--ry"].forEach((k) => el.style.removeProperty(k));
+  }, { passive: true });
 })();
 </script>
 </body>
