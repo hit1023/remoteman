@@ -533,6 +533,10 @@
   #bcast-banner button { padding: 2px 10px; min-height: 0; background: rgba(255,255,255,.9); color: #b0182b; font-size: 12px; }
   #console-box.broadcasting { border-color: #ff5a6e; box-shadow: 0 0 0 2px rgba(255,90,110,.7), 0 0 50px rgba(255,90,110,.45), 0 30px 80px rgba(0,0,0,.65); }
   #console-box.broadcasting .console-term-panel.shown { border-color: rgba(255,90,110,.8) !important; }
+  /* ウィンドウに追従して広がる(最大化すると端末も大きくなる) */
+  @media (min-width: 721px) { #console-box { width: min(96vw, 2400px); height: 92vh; height: 92dvh; max-width: 98vw; max-height: 96vh; } }
+  #console-panels.split4.one-row { grid-template-rows: 1fr; }
+  .console-term-panel { padding: 8px 4px 10px 10px; }
 </style>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 </head>
@@ -1465,6 +1469,10 @@ async function openConsole(server) {
   const tab = { server, ws: null, term, fitAddon, tabButtonEl, panelEl, status: "接続準備中...",
                 sessionId: null, retries: 0, retryTimer: null, closing: false, ended: false, fatal: false, noticed: false };
   consoleTabs.set(tabId, tab);
+  if (window.ResizeObserver) {
+    let raf = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (panelEl.classList.contains("shown") && tab.sendResize) tab.sendResize(); }); }).observe(panelEl);
+  }
   panelEl.addEventListener("pointerdown", () => { if (activeConsoleTabId !== tabId) activateConsoleTab(tabId); });
   term.onData((data) => { if (consoleTabs.get(activeConsoleTabId) === tab) sendInput(data); });
   activateConsoleTab(tabId);
@@ -1497,6 +1505,7 @@ function layoutPanels() {
   }
   consolePanelsEl.classList.toggle("split2", n === 2);
   consolePanelsEl.classList.toggle("split4", n === 4);
+  consolePanelsEl.classList.toggle("one-row", n === 4 && shown.length <= 2);
   // グリッドの並び順をタブ順に揃える
   shown.sort((a, b) => ids.indexOf(a) - ids.indexOf(b));
   shown.forEach((id) => consolePanelsEl.appendChild(consoleTabs.get(id).panelEl));
