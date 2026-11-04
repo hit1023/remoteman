@@ -536,7 +536,9 @@
   /* ウィンドウに追従して広がる(最大化すると端末も大きくなる) */
   @media (min-width: 721px) { #console-box { width: min(96vw, 2400px); height: 92vh; height: 92dvh; max-width: 98vw; max-height: 96vh; } }
   #console-panels.split4.one-row { grid-template-rows: 1fr; }
-  .console-term-panel { padding: 8px 4px 10px 10px; }
+  /* 余白はパネルではなく .xterm に付ける(FitAddonは親のpaddingを引かないため、パネル側paddingだと最終行が見切れる) */
+  .console-term-panel { padding: 0 !important; }
+  .console-term-panel .xterm { padding: 8px 4px 14px 10px; }
   /* ツールバーのグループ分け: 色と見出しで機能を区別 */
   #console-toolbar { gap: 8px; }
   #console-toolbar .grp { display: flex; align-items: center; gap: 6px; flex: none; padding: 3px 8px 3px 8px; border-radius: 12px; border: 1px solid var(--gc, rgba(255,255,255,.14)); background: var(--gb, rgba(255,255,255,.04)); position: relative; }
