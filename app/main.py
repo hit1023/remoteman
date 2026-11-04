@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import auth, console, crypto, import_ssh, models, schemas
+from . import ai_assist, auth, console, crypto, import_ssh, models, schemas
 from .database import Base, SessionLocal, engine, get_db
 from .netutil import get_client_ip
 
@@ -59,6 +59,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="remoteman", lifespan=lifespan)
 app.include_router(console.router)
+app.include_router(ai_assist.router)
 app.include_router(import_ssh.router)
 
 

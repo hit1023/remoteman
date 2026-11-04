@@ -71,3 +71,11 @@ class LoginLog(Base):
     client_ip = Column(String, nullable=False)
     success = Column(Boolean, nullable=False, default=True)
     detail = Column(String, nullable=True)
+
+
+class AppSetting(Base):
+    """キー/値の汎用設定(AIアシストのLLM設定など)。秘密値は暗号化して保存する。"""
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False, default="")

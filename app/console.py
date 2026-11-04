@@ -2,14 +2,12 @@ import asyncio
 import json
 import logging
 import os
-import re
 import secrets
 import threading
 import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from . import auth, models, ssh_connect
@@ -319,78 +317,3 @@ async def console_websocket(websocket: WebSocket, server_id: int, ticket: str = 
         logger.exception("コンソールWebSocket処理中にエラーが発生しました")
     finally:
         sess.detach(websocket)  # 切れても KEEPALIVE_SECONDS の間はシェルを保持
-
-
-# ---------------------------------------------------------------------------
-# AI アシスト(任意): 自然文→コマンド候補 / 端末出力の解説。Cloudflare Workers AI を使う。
-# CF_ACCOUNT_ID / CF_API_TOKEN が未設定なら無効。コマンドは提案のみで自動実行しない。
-# ---------------------------------------------------------------------------
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
-AI_MODEL = os.environ.get("AI_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast")
-
-
-class AiRequest(BaseModel):
-    mode: str  # "command" | "explain"
-    text: str
-    server_name: str = ""
-
-
-@router.get("/api/ai/status")
-def ai_status(current_user: models.User = Depends(auth.get_current_user)):
-    return {"enabled": bool(CF_ACCOUNT_ID and CF_API_TOKEN)}
-
-
-@router.post("/api/ai/assist")
-def ai_assist(req: AiRequest, current_user: models.User = Depends(auth.get_current_user)):
-    if not (CF_ACCOUNT_ID and CF_API_TOKEN):
-        raise HTTPException(status_code=503, detail="AIアシストが設定されていません")
-    text = req.text.strip()[:6000]
-    if not text:
-        raise HTTPException(status_code=400, detail="入力が空です")
-    if req.mode == "command":
-        system = (
-            "あなたはLinuxシェルの熟練者。ユーザーの依頼を実行する bash の1行コマンドを提案する。"
-            "必ずJSONのみを返す: {\"command\": \"...\", \"explain\": \"日本語で1文の説明\", \"danger\": true|false}。"
-            "データ削除・上書き・再起動・権限変更・ネットワーク遮断など破壊的/不可逆なら danger を true にする。"
-            "コードブロックや前置きは書かない。"
-        )
-        user = f"サーバー: {req.server_name or '不明'}\n依頼: {text}"
-    elif req.mode == "explain":
-        system = (
-            "あなたはLinux/インフラの熟練者。ターミナルの直近出力を読み、日本語で簡潔に(最大8行)、"
-            "何が起きているか・エラーなら原因と次に打つべきコマンドを説明する。"
-        )
-        user = f"サーバー: {req.server_name or '不明'}\n--- 端末出力 ---\n{text}"
-    else:
-        raise HTTPException(status_code=400, detail="mode が不正です")
-
-    import urllib.request
-
-    try:
-        body = json.dumps({"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}], "max_tokens": 600}).encode()
-        rq = urllib.request.Request(
-            f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{AI_MODEL}",
-            data=body, method="POST",
-            headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(rq, timeout=30) as resp:
-            out = (json.loads(resp.read()).get("result") or {}).get("response", "")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI呼び出しに失敗しました: {e}")
-
-    if req.mode == "explain":
-        return {"explain": out.strip() if isinstance(out, str) else json.dumps(out, ensure_ascii=False)}
-    if isinstance(out, dict):  # JSON を返すモデルは既にパース済みの dict を返すことがある
-        data = out
-    else:
-        m = re.search(r"\{.*\}", str(out), re.S)
-        try:
-            data = json.loads(m.group(0)) if m else {}
-        except ValueError:
-            data = {}
-    cmd = str(data.get("command", "")).strip().replace("\n", " ")
-    if not cmd:
-        raise HTTPException(status_code=502, detail="コマンドを生成できませんでした")
-    danger = bool(data.get("danger")) or bool(re.search(r"\brm\s+-[a-zA-Z]*r|\bmkfs|\bdd\s+if=|:\(\)\s*\{|\b(shutdown|reboot|halt|poweroff)\b|>\s*/dev/sd|chmod\s+-R\s+777|\bdrop\s+(table|database)", cmd, re.I))
-    return {"command": cmd, "explain": str(data.get("explain", "")), "danger": danger}

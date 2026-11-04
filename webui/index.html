@@ -537,6 +537,34 @@
   @media (min-width: 721px) { #console-box { width: min(96vw, 2400px); height: 92vh; height: 92dvh; max-width: 98vw; max-height: 96vh; } }
   #console-panels.split4.one-row { grid-template-rows: 1fr; }
   .console-term-panel { padding: 8px 4px 10px 10px; }
+  /* ツールバーのグループ分け: 色と見出しで機能を区別 */
+  #console-toolbar { gap: 8px; }
+  #console-toolbar .grp { display: flex; align-items: center; gap: 6px; flex: none; padding: 3px 8px 3px 8px; border-radius: 12px; border: 1px solid var(--gc, rgba(255,255,255,.14)); background: var(--gb, rgba(255,255,255,.04)); position: relative; }
+  #console-toolbar .glabel { font-size: 10px; letter-spacing: .08em; color: var(--gt, #9aa4b8); font-weight: 700; writing-mode: horizontal-tb; white-space: nowrap; }
+  #console-toolbar .g-input { --gc: rgba(56,189,248,.45); --gb: rgba(56,189,248,.07); --gt: #7dd3fc; }
+  #console-toolbar .g-split { --gc: rgba(167,139,250,.55); --gb: rgba(167,139,250,.09); --gt: #c4b5fd; }
+  #console-toolbar .g-multi { --gc: rgba(255,120,134,.45); --gb: rgba(255,90,110,.07); --gt: #ff9aa6; }
+  #console-toolbar .g-font { --gt: #9aa4b8; }
+  #console-toolbar .seg { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid rgba(167,139,250,.5); }
+  #console-toolbar .seg button { border-radius: 0; border: none; border-right: 1px solid rgba(167,139,250,.3); min-width: 54px; display: flex; align-items: center; gap: 6px; justify-content: center; background: rgba(255,255,255,.05); box-shadow: none; }
+  #console-toolbar .seg button:last-child { border-right: none; }
+  #console-toolbar .seg button.on { background: linear-gradient(180deg, rgba(196,181,253,.95), rgba(139,92,246,.85)); color: #170a3a; box-shadow: 0 0 14px rgba(167,139,250,.6); }
+  #console-toolbar .ic { display: inline-block; width: 14px; height: 11px; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+  #console-toolbar .ic2::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1.5px solid currentColor; }
+  #console-toolbar .ic4::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1.5px solid currentColor; }
+  #console-toolbar .ic4::after { content: ""; position: absolute; top: 50%; left: 0; right: 0; border-top: 1.5px solid currentColor; }
+  #tb-split-grp { display: none !important; }
+  @media (min-width: 1000px) and (hover: hover) { #tb-split-grp { display: flex !important; } }
+  @media (max-width: 720px), (hover: none) { #console-toolbar .glabel { display: none; } #console-toolbar .grp { padding: 0; border: none; background: none; } }
+  .console-term-panel .pane-label { display: none; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: rgba(0,0,0,.45); color: #cfe3f7; }
+  #console-panels.split2 .pane-label, #console-panels.split4 .pane-label { display: block; }
+  #console-panels.split2 .console-term-panel.active .pane-label, #console-panels.split4 .console-term-panel.active .pane-label { background: rgba(56,189,248,.35); color: #fff; }
+
+#ai-settings-card .ai-f{display:none}
+#ai-settings-card .ai-f.show{display:block}
+#ai-settings-card .ai-actions{display:flex;gap:8px;margin-top:12px}
+#ai-settings-card .ai-chk{display:flex;gap:8px;align-items:center;margin-top:10px}
+#ai-settings-card .ai-chk input{width:auto}
 </style>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 </head>
@@ -788,6 +816,47 @@
         <div class="hint">端末画面(黒背景のコンソール)は見やすさのため常にダーク表示のままです</div>
       </div>
 
+      <div class="card" id="ai-settings-card">
+        <h3 style="margin-top:0;">✨ AIアシスト(LLM)設定</h3>
+        <label>使うLLM</label>
+        <select id="ai-provider">
+          <option value="cloudflare">Cloudflare AI Gateway(メイン・推奨)</option>
+          <option value="anthropic">Claude(Anthropic)</option>
+          <option value="openai">OpenAI互換(OpenAI / Grok / Gemini / Ollama など)</option>
+        </select>
+        <div id="ai-f-cloudflare" class="ai-f">
+          <label>アカウントID</label><input id="ai-cf-account" placeholder="a02903a6...">
+          <label>ゲートウェイID(AI Gatewayの名前)</label><input id="ai-cf-gateway" placeholder="例: default">
+          <label>APIトークン(Workers AI権限)</label><input id="ai-cf-key" type="password" autocomplete="new-password" placeholder="">
+          <label>モデル</label><input id="ai-cf-model">
+          <div class="hint">リクエストは Cloudflare AI Gateway を経由し、ダッシュボードでログ・コスト・キャッシュを確認できます。ゲートウェイIDを空にすると直接Workers AIを呼びます。</div>
+        </div>
+        <div id="ai-f-anthropic" class="ai-f">
+          <label>APIキー</label><input id="ai-an-key" type="password" autocomplete="new-password">
+          <label>モデル</label><input id="ai-an-model">
+          <label class="ai-chk"><input type="checkbox" id="ai-an-gw"> AI Gateway経由にする(上記Cloudflare設定のアカウント/ゲートウェイを使用)</label>
+        </div>
+        <div id="ai-f-openai" class="ai-f">
+          <label>プリセット</label>
+          <select id="ai-oa-preset">
+            <option value="">(選択して自動入力)</option>
+            <option value="https://api.openai.com/v1|gpt-4o-mini">OpenAI</option>
+            <option value="https://api.x.ai/v1|grok-4">xAI Grok</option>
+            <option value="https://generativelanguage.googleapis.com/v1beta/openai|gemini-2.5-flash">Google Gemini</option>
+            <option value="http://host.docker.internal:11434/v1|llama3.1">Ollama(ローカル)</option>
+          </select>
+          <label>ベースURL</label><input id="ai-oa-base" placeholder="https://api.openai.com/v1">
+          <label>APIキー(ローカルLLMは空でOK)</label><input id="ai-oa-key" type="password" autocomplete="new-password">
+          <label>モデル</label><input id="ai-oa-model">
+          <label class="ai-chk"><input type="checkbox" id="ai-oa-gw"> AI Gateway経由にする(OpenAI向け)</label>
+        </div>
+        <div class="ai-actions">
+          <button id="ai-save-btn">保存</button>
+          <button class="secondary" id="ai-test-btn">接続テスト</button>
+        </div>
+        <div class="hint" id="ai-msg">APIキーは暗号化して保存され、画面には表示されません(設定済みの場合は空欄のまま)。</div>
+      </div>
+
       <div class="section-header">
         <h3 style="margin:0;">ログイン履歴</h3>
         <button class="secondary small" id="refresh-login-logs-btn">更新</button>
@@ -859,13 +928,25 @@
       <button data-s="\u0003" class="keys-only">^C</button>
       <button data-s="\u0004" class="keys-only">^D</button>
       <span class="sep keys-only"></span>
-      <button id="tb-paste" title="クリップボードから貼り付け">貼付</button>
-      <button id="tb-snip" title="コマンド集">📋 集</button>
-      <button id="tb-ai" title="AIにコマンドを作ってもらう / 出力を解説してもらう">✨ AI</button>
-      <button id="tb-split" title="画面分割: 1 → 2 → 4">⊞ 1</button>
-      <button id="tb-bcast" class="bcast" title="入力を開いている全タブに同時送信">📡 一斉</button>
-      <button id="tb-fm" title="文字を小さく">A−</button>
-      <button id="tb-fp" title="文字を大きく">A＋</button>
+      <div class="grp g-input"><span class="glabel">入力</span>
+        <button id="tb-paste" title="クリップボードの内容を貼り付け">📥 貼り付け</button>
+        <button id="tb-snip" title="よく使うコマンドを登録してタップで送信">📋 コマンド集</button>
+        <button id="tb-ai" title="AIにコマンドを作ってもらう / 出力を解説してもらう">✨ AIアシスト</button>
+      </div>
+      <div class="grp g-split" id="tb-split-grp"><span class="glabel">画面分割</span>
+        <div class="seg">
+          <button data-split="1" title="1画面"><i class="ic ic1"></i>1</button>
+          <button data-split="2" title="2画面(左右)"><i class="ic ic2"></i>2</button>
+          <button data-split="4" title="4画面"><i class="ic ic4"></i>4</button>
+        </div>
+      </div>
+      <div class="grp g-multi"><span class="glabel">複数タブ</span>
+        <button id="tb-bcast" class="bcast" title="入力を開いている全タブに同時送信(危険: 使用時は確認が出ます)">📡 一斉入力</button>
+      </div>
+      <div class="grp g-font"><span class="glabel">文字</span>
+        <button id="tb-fm" title="文字を小さく">A−</button>
+        <button id="tb-fp" title="文字を大きく">A＋</button>
+      </div>
     </div>
   </div>
 </div>
@@ -973,6 +1054,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.add("active");
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
     if (btn.dataset.tab === "settings") {
+      loadAiSettings();
       refreshLoginLogs();
       refreshAccessLogs();
     }
@@ -983,6 +1065,57 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 // 設定(テーマ)
 // ============================================================
 const THEME_KEY = "remoteman_theme";
+
+// ---------------- AIアシスト設定 ----------------
+const aiEl = (id) => document.getElementById(id);
+let aiCfg = null;
+function aiShowForm() {
+  const v = aiEl("ai-provider").value;
+  document.querySelectorAll("#ai-settings-card .ai-f").forEach((d) => d.classList.toggle("show", d.id === "ai-f-" + v));
+}
+async function loadAiSettings() {
+  try {
+    aiCfg = await api("/api/ai/config");
+  } catch (e) { aiEl("ai-msg").textContent = e.message; return; }
+  const P = aiCfg.providers, D = aiCfg.defaults;
+  aiEl("ai-provider").value = aiCfg.provider || "cloudflare";
+  aiEl("ai-cf-account").value = P.cloudflare.account_id;
+  aiEl("ai-cf-gateway").value = P.cloudflare.gateway_id;
+  aiEl("ai-cf-model").value = P.cloudflare.model; aiEl("ai-cf-model").placeholder = D.cloudflare;
+  aiEl("ai-cf-key").value = ""; aiEl("ai-cf-key").placeholder = P.cloudflare.has_key ? "設定済み(変更する場合のみ入力)" : "未設定";
+  aiEl("ai-an-model").value = P.anthropic.model; aiEl("ai-an-model").placeholder = D.anthropic;
+  aiEl("ai-an-key").value = ""; aiEl("ai-an-key").placeholder = P.anthropic.has_key ? "設定済み(変更する場合のみ入力)" : "未設定";
+  aiEl("ai-an-gw").checked = P.anthropic.via_gateway;
+  aiEl("ai-oa-base").value = P.openai.base_url;
+  aiEl("ai-oa-model").value = P.openai.model; aiEl("ai-oa-model").placeholder = D.openai;
+  aiEl("ai-oa-key").value = ""; aiEl("ai-oa-key").placeholder = P.openai.has_key ? "設定済み(変更する場合のみ入力)" : "未設定";
+  aiEl("ai-oa-gw").checked = P.openai.via_gateway;
+  aiShowForm();
+}
+aiEl("ai-provider").addEventListener("change", aiShowForm);
+aiEl("ai-oa-preset").addEventListener("change", (e) => {
+  const [u, m] = e.target.value.split("|");
+  if (u) { aiEl("ai-oa-base").value = u; aiEl("ai-oa-model").value = m; }
+});
+async function saveAiSettings() {
+  const body = { provider: aiEl("ai-provider").value, providers: {
+    cloudflare: { account_id: aiEl("ai-cf-account").value, gateway_id: aiEl("ai-cf-gateway").value, model: aiEl("ai-cf-model").value, api_key: aiEl("ai-cf-key").value || null },
+    anthropic: { model: aiEl("ai-an-model").value, via_gateway: aiEl("ai-an-gw").checked, api_key: aiEl("ai-an-key").value || null },
+    openai: { base_url: aiEl("ai-oa-base").value, model: aiEl("ai-oa-model").value, via_gateway: aiEl("ai-oa-gw").checked, api_key: aiEl("ai-oa-key").value || null },
+  } };
+  await api("/api/ai/config", { method: "PUT", body: JSON.stringify(body) });
+  await loadAiSettings();
+  try { aiEnabled = (await api("/api/ai/status")).enabled; } catch (e) {}
+}
+aiEl("ai-save-btn").addEventListener("click", async () => {
+  try { await saveAiSettings(); aiEl("ai-msg").textContent = "保存しました"; } catch (e) { aiEl("ai-msg").textContent = "保存失敗: " + e.message; }
+});
+aiEl("ai-test-btn").addEventListener("click", async () => {
+  aiEl("ai-msg").textContent = "テスト中…";
+  try { await saveAiSettings(); const r = await api("/api/ai/test", { method: "POST" }); aiEl("ai-msg").textContent = "✅ 接続OK: " + r.reply; }
+  catch (e) { aiEl("ai-msg").textContent = "❌ " + e.message; }
+});
+
 const themeSelect = document.getElementById("theme-select");
 themeSelect.value = localStorage.getItem(THEME_KEY) || "system";
 themeSelect.addEventListener("change", () => {
@@ -1452,6 +1585,10 @@ async function openConsole(server) {
   const panelEl = document.createElement("div");
   panelEl.className = "console-term-panel";
   consolePanelsEl.appendChild(panelEl);
+  const paneLabel = document.createElement("span");
+  paneLabel.className = "pane-label";
+  paneLabel.textContent = server.name;
+  panelEl.appendChild(paneLabel);
 
   const term = new Terminal({
     fontSize,
@@ -1514,8 +1651,7 @@ function layoutPanels() {
     t.panelEl.classList.toggle("active", id === activeConsoleTabId);
     t.tabButtonEl.classList.toggle("visible", shown.includes(id));
   }
-  const sb = document.getElementById("tb-split");
-  if (sb) sb.textContent = `⊞ ${splitMode}`;
+  document.querySelectorAll("#console-toolbar [data-split]").forEach((el) => el.classList.toggle("on", parseInt(el.dataset.split, 10) === splitMode));
   requestAnimationFrame(() => {
     for (const id of shown) { const t = consoleTabs.get(id); if (t && t.sendResize) t.sendResize(); }
   });
@@ -1698,7 +1834,7 @@ toolbarEl.addEventListener("click", async (e) => {
     else if (consoleTabs.size < 2) showToast("タブが2つ以上あるときに使えます");
     else if (confirm("一斉入力をONにします。入力したキーが開いている全タブ(全サーバー)に送られます。よろしいですか？")) setBroadcast(true);
   }
-  else if (b.id === "tb-split") { setBroadcast(false, true); splitMode = splitMode === 1 ? 2 : splitMode === 2 ? 4 : 1; try { localStorage.setItem(SPLIT_KEY, String(splitMode)); } catch (err) { /* ignore */ } layoutPanels(); }
+  else if (b.dataset.split) { setBroadcast(false, true); splitMode = parseInt(b.dataset.split, 10); try { localStorage.setItem(SPLIT_KEY, String(splitMode)); } catch (err) { /* ignore */ } layoutPanels(); }
   else if (b.id === "tb-fm") { fontSize = Math.max(9, fontSize - 1); applyFontSize(); }
   else if (b.id === "tb-fp") { fontSize = Math.min(26, fontSize + 1); applyFontSize(); }
   if (b.dataset.k || b.dataset.s || b.dataset.mod) { const t = consoleTabs.get(activeConsoleTabId); if (t && !b.dataset.mod) t.term.focus(); }

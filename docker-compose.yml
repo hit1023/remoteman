@@ -17,6 +17,7 @@ services:
       CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       AI_MODEL: ${AI_MODEL:-@cf/meta/llama-3.3-70b-instruct-fp8-fast}
+      CF_GATEWAY_ID: ${CF_GATEWAY_ID:-}
     volumes:
       - ./data:/data
     restart: unless-stopped
